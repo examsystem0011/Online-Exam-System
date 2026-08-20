@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>পরীক্ষা সিস্টেম</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Hind Siliguri', 'Noto Sans Bengali', system-ui, sans-serif;
+    background: #F4F1EA;
+    color: #2C2C2A;
+    margin: 0;
+    padding: 24px 16px;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin: 0 0 4px; }
+  .sub { color: #5F5E5A; font-size: 14px; margin: 0 0 24px; }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 24px; }
+  .tab-btn {
+    flex: 1; padding: 10px 12px; border: 1px solid #D3D1C7; border-radius: 8px;
+    background: #fff; cursor: pointer; font-size: 15px; font-family: inherit;
+    color: #5F5E5A;
+  }
+  .tab-btn.active { background: #2C2C2A; color: #fff; border-color: #2C2C2A; }
+
+  .subtabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+  .subtab-btn {
+    flex: 1; min-width: 100px; padding: 9px 10px; border: 1px solid #D3D1C7; border-radius: 8px;
+    background: #fff; cursor: pointer; font-size: 14px; font-family: inherit;
+    color: #5F5E5A;
+  }
+  .subtab-btn.active { background: #2C2C2A; color: #fff; border-color: #2C2C2A; }
+
+  .card {
+    background: #fff; border: 1px solid #E4E2D8; border-radius: 12px;
+    padding: 20px; margin-bottom: 16px;
+  }
+  label { display: block; font-size: 13px; color: #5F5E5A; margin-bottom: 6px; }
+  input[type=text], input[type=number], input[type=password], textarea, select {
+    width: 100%; padding: 10px 12px; border: 1px solid #D3D1C7; border-radius: 8px;
+    font-size: 15px; font-family: inherit; margin-bottom: 14px; background: #fff;
+  }
+  textarea { resize: vertical; min-height: 60px; }
+  button {
+    background: #2C2C2A; color: #fff; border: none; border-radius: 8px;
+    padding: 11px 18px; font-size: 15px; font-family: inherit; cursor: pointer;
+  }
+  button.secondary { background: #fff; color: #2C2C2A; border: 1px solid #D3D1C7; }
+  button.danger { background: #fff; color: #A32D2D; border: 1px solid #F0999599; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .exam-card {
+    border: 1px solid #E4E2D8; border-radius: 10px; padding: 14px 16px; margin-bottom: 10px;
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  }
+  .exam-card .info { flex: 1; min-width: 0; }
+  .exam-card .name { font-weight: 500; margin-bottom: 2px; }
+  .exam-card .meta { font-size: 13px; color: #888780; }
+  .exam-card .actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .exam-card .actions button { padding: 7px 12px; font-size: 13px; }
+
+  .q-item { border: 1px solid #E4E2D8; border-radius: 10px; padding: 14px; margin-bottom: 10px; }
+  .q-item .q-text { font-weight: 500; margin-bottom: 8px; }
+  .q-item .opt { font-size: 14px; color: #5F5E5A; padding: 3px 0; }
+  .q-item .opt.correct { color: #3B6D11; font-weight: 500; }
+  .q-item-actions { margin-top: 10px; display: flex; gap: 8px; }
+  .q-item-actions button { padding: 6px 12px; font-size: 13px; }
+
+  .option-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .option-row input[type=text] { margin-bottom: 0; flex: 1; }
+  .option-row input[type=radio] { width: 18px; height: 18px; flex-shrink: 0; }
+
+  .exam-q { margin-bottom: 22px; }
+  .exam-q .qn { font-size: 13px; color: #888780; margin-bottom: 4px; }
+  .exam-q .qtext { font-weight: 500; font-size: 16px; margin-bottom: 10px; }
+  .choice {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    border: 1px solid #D3D1C7; border-radius: 8px; margin-bottom: 8px; cursor: pointer;
+  }
+  .choice input { width: 18px; height: 18px; flex-shrink: 0; }
+  .choice.selected { border-color: #2C2C2A; background: #F4F1EA; }
+
+  .result-item { border-left: 3px solid #D3D1C7; padding: 10px 14px; margin-bottom: 12px; border-radius: 0 8px 8px 0; }
+  .result-item.correct { border-left-color: #639922; background: #EAF3DE55; }
+  .result-item.wrong { border-left-color: #E24B4A; background: #FCEBEB55; }
+  .result-item .tag { font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+  .result-item.correct .tag { color: #3B6D11; }
+  .result-item.wrong .tag { color: #A32D2D; }
+  .result-item .exp { font-size: 14px; color: #5F5E5A; margin-top: 6px; }
+
+  .score-box {
+    text-align: center; padding: 24px; background: #fff; border: 1px solid #E4E2D8;
+    border-radius: 12px; margin-bottom: 20px;
+  }
+  .score-box .num { font-size: 36px; font-weight: 700; }
+  .score-box .lbl { font-size: 14px; color: #5F5E5A; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #E4E2D8; }
+  th { color: #5F5E5A; font-weight: 500; font-size: 13px; }
+
+  .empty { text-align: center; color: #888780; padding: 30px 10px; font-size: 14px; }
+  .err { color: #A32D2D; font-size: 13px; margin: -8px 0 12px; }
+  .hint { font-size: 13px; color: #888780; margin-top: -8px; margin-bottom: 14px; }
+
+  .timer {
+    position: sticky; top: 8px; z-index: 5; text-align: center; font-weight: 500;
+    background: #2C2C2A; color: #fff; padding: 8px 14px; border-radius: 8px;
+    margin-bottom: 16px; font-size: 15px;
+  }
+  .timer.low { background: #A32D2D; }
+
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 10px; flex-wrap: wrap; }
+  .toolbar h2 { font-size: 16px; font-weight: 500; margin: 0; }
+  .badge { display: inline-block; background: #F4F1EA; color: #5F5E5A; font-size: 12px; padding: 2px 8px; border-radius: 20px; margin-left: 6px; }
+  .back-link { background: none; color: #5F5E5A; border: none; padding: 0; font-size: 14px; cursor: pointer; margin-bottom: 12px; text-decoration: underline; }
+  .loading { text-align: center; color: #888780; padding: 40px 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>পরীক্ষা সিস্টেম</h1>
+  <p class="sub" id="subtitle">লোড হচ্ছে...</p>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="student" id="mainTabStudent">শিক্ষার্থী</button>
+    <button class="tab-btn" data-tab="teacher" id="mainTabTeacher">শিক্ষক</button>
+  </div>
+
+  <div id="content"><div class="loading">লোড হচ্ছে...</div></div>
+</div>
+
+<script>
+// ============ SUPABASE কনফিগারেশন ============
+// এই দুইটা মান আপনার Supabase প্রজেক্টের — এখানে বসানো আছে
+const SUPABASE_URL = 'https://dnbajrnkhiikbufbhckn.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_s38H81BA_-Yc9eFPcPkZpw_7-BOe6Df';
+const TEACHER_PASSWORD = 'teacher123'; // চাইলে এখানে বদলান
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let state = {
+  tab: 'student',
+  exams: [],      // [{id, title, duration_min, questions: [{id, text, explanation, correct_index, options:[{id,option_text,option_order}]}]}]
+  results: [],
+  authed: false,
+  loading: true,
+
+  studentView: 'list',
+  activeExamId: null,
+  studentName: '',
+  answers: {},
+  lastResult: null,
+  timerInterval: null,
+  timeLeftSec: null,
+
+  teacherView: 'exams',
+  teacherExamId: null,
+  editingOptions: [{text:'', correct:true}, {text:'', correct:false}]
+};
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s ?? '';
+  return d.innerHTML;
+}
+function getExam(id) {
+  return state.exams.find(e => e.id === id);
+}
+
+// ============ ডেটা লোড করা (Supabase থেকে) ============
+
+async function loadAll() {
+  state.loading = true;
+  render();
+  try {
+    const { data: exams, error: examErr } = await sb
+      .from('exams')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (examErr) throw examErr;
+
+    const { data: questions, error: qErr } = await sb
+      .from('questions')
+      .select('*')
+      .order('created_at', { ascending: true });
+    if (qErr) throw qErr;
+
+    const { data: options, error: oErr } = await sb
+      .from('options')
+      .select('*')
+      .order('option_order', { ascending: true });
+    if (oErr) throw oErr;
+
+    const { data: results, error: rErr } = await sb
+      .from('results')
+      .select('*')
+      .order('submitted_at', { ascending: false });
+    if (rErr) throw rErr;
+
+    // প্রশ্নের সাথে অপশন জোড়া লাগানো
+    const questionsWithOptions = questions.map(q => ({
+      id: q.id,
+      text: q.text,
+      explanation: q.explanation,
+      correctIndex: q.correct_index,
+      options: options.filter(o => o.question_id === q.id).map(o => o.option_text)
+    }));
+
+    // পরীক্ষার সাথে প্রশ্ন জোড়া লাগানো
+    state.exams = exams.map(ex => ({
+      id: ex.id,
+      title: ex.title,
+      durationMin: ex.duration_min,
+      questions: questionsWithOptions.filter(q => {
+        const orig = questions.find(qq => qq.id === q.id);
+        return orig.exam_id === ex.id;
+      })
+    }));
+
+    state.results = results.map(r => ({
+      id: r.id,
+      examId: r.exam_id,
+      studentName: r.student_name,
+      score: r.score,
+      total: r.total,
+      answers: r.answers,
+      submittedAt: r.submitted_at
+    }));
+
+  } catch (err) {
+    console.error('ডেটা লোড করতে সমস্যা:', err);
+    document.getElementById('content').innerHTML =
+      `<div class="card"><div class="empty">ডেটা লোড করতে সমস্যা হয়েছে। ইন্টারনেট সংযোগ চেক করুন অথবা পেজ রিফ্রেশ করুন।<br><br><span style="font-size:12px">${esc(err.message || '')}</span></div></div>`;
+    state.loading = false;
+    return;
+  }
+  state.loading = false;
+  render();
+}
+
+function switchTab(tab) {
+  state.tab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tab);
+  });
+  render();
+}
+
+function render() {
+  if (state.loading) return;
+  const c = document.getElementById('content');
+  document.getElementById('subtitle').textContent =
+    state.tab === 'student' ? 'পরীক্ষা বেছে নিন এবং অংশ নিন' : 'পরীক্ষা তৈরি করুন ও রেজাল্ট দেখুন';
+
+  if (state.tab === 'teacher') {
+    c.innerHTML = renderTeacher();
+    bindTeacherEvents();
+  } else {
+    c.innerHTML = renderStudent();
+    bindStudentEvents();
+  }
+}
+
+// ================= TEACHER =================
+
+function renderTeacher() {
+  if (!state.authed) return renderLogin();
+
+  let html = '<div class="subtabs">';
+  html += `<button class="subtab-btn ${state.teacherView==='exams'?'active':''}" data-view="exams">পরীক্ষাসমূহ (${state.exams.length})</button>`;
+  html += `<button class="subtab-btn ${state.teacherView==='addExam'?'active':''}" data-view="addExam">নতুন পরীক্ষা</button>`;
+  html += `<button class="subtab-btn ${state.teacherView==='results'?'active':''}" data-view="results">সব রেজাল্ট (${state.results.length})</button>`;
+  html += '</div>';
+
+  if (state.teacherView === 'addExam') html += renderAddExam();
+  else if (state.teacherView === 'examDetail') html += renderExamDetail();
+  else if (state.teacherView === 'addQuestion') html += renderAddQuestion();
+  else if (state.teacherView === 'results') html += renderTeacherResults();
+  else html += renderExamList();
+
+  return html;
+}
+
+function renderLogin() {
+  return `<div class="card">
+    <label>শিক্ষক পাসওয়ার্ড দিন</label>
+    <input type="password" id="teacherPass" placeholder="পাসওয়ার্ড">
+    <div id="loginErr" class="err" style="display:none"></div>
+    <button data-action="teacher-login">প্রবেশ করুন</button>
+  </div>`;
+}
+
+function renderExamList() {
+  if (state.exams.length === 0) {
+    return '<div class="card"><div class="empty">এখনো কোনো পরীক্ষা তৈরি করা হয়নি।<br>"নতুন পরীক্ষা" ট্যাবে গিয়ে শুরু করুন।</div></div>';
+  }
+  let html = '';
+  state.exams.forEach(ex => {
+    const count = ex.questions.length;
+    const attempts = state.results.filter(r => r.examId === ex.id).length;
+    html += `<div class="exam-card">
+      <div class="info">
+        <div class="name">${esc(ex.title)}</div>
+        <div class="meta">${count}টি প্রশ্ন${ex.durationMin ? ' · ' + ex.durationMin + ' মিনিট' : ' · সময়সীমা নেই'} · ${attempts}টি জমা</div>
+      </div>
+      <div class="actions">
+        <button class="secondary" data-action="open-exam" data-id="${ex.id}">দেখুন</button>
+        <button class="danger" data-action="delete-exam" data-id="${ex.id}">মুছুন</button>
+      </div>
+    </div>`;
+  });
+  return html;
+}
+
+function renderAddExam() {
+  return `<div class="card">
+    <label>পরীক্ষার নাম</label>
+    <input type="text" id="newExamTitle" placeholder="যেমন: সাধারণ জ্ঞান - সেট ১">
+    <label>সময়সীমা (মিনিট, খালি রাখলে সময়সীমা থাকবে না)</label>
+    <input type="number" id="newExamDuration" placeholder="যেমন: 15" min="1">
+    <div id="examErr2" class="err" style="display:none"></div>
+    <button data-action="create-exam">পরীক্ষা তৈরি করুন</button>
+  </div>`;
+}
+
+function renderExamDetail() {
+  const ex = getExam(state.teacherExamId);
+  if (!ex) return '<div class="card"><div class="empty">পরীক্ষাটি পাওয়া যায়নি।</div></div>';
+
+  let html = `<button class="back-link" data-action="back-to-exams">← সব পরীক্ষায় ফিরুন</button>`;
+  html += `<div class="toolbar">
+    <h2>${esc(ex.title)} <span class="badge">${ex.questions.length}টি প্রশ্ন</span></h2>
+    <button data-action="add-question-to" data-id="${ex.id}">+ প্রশ্ন যোগ করুন</button>
+  </div>`;
+
+  if (ex.questions.length === 0) {
+    html += '<div class="card"><div class="empty">এই পরীক্ষায় এখনো কোনো প্রশ্ন নেই।</div></div>';
+  } else {
+    ex.questions.forEach((q, i) => {
+      html += `<div class="q-item">
+        <div class="q-text">${i+1}. ${esc(q.text)}</div>`;
+      q.options.forEach((o, oi) => {
+        html += `<div class="opt ${oi === q.correctIndex ? 'correct' : ''}">${oi === q.correctIndex ? '✓ ' : '&nbsp;&nbsp;'}${esc(o)}</div>`;
+      });
+      if (q.explanation) {
+        html += `<div class="hint" style="margin-top:8px">ব্যাখ্যা: ${esc(q.explanation)}</div>`;
+      }
+      html += `<div class="q-item-actions">
+        <button class="danger" data-action="delete-question" data-id="${q.id}">মুছে ফেলুন</button>
+      </div></div>`;
+    });
+  }
+  return html;
+}
+
+function renderAddQuestion() {
+  const ex = getExam(state.teacherExamId);
+  if (!ex) return '<div class="card"><div class="empty">পরীক্ষাটি পাওয়া যায়নি।</div></div>';
+
+  const opts = state.editingOptions;
+  let optsHtml = '';
+  opts.forEach((o, i) => {
+    optsHtml += `<div class="option-row">
+      <input type="radio" name="correctOpt" ${o.correct ? 'checked' : ''} data-action="set-correct" data-index="${i}">
+      <input type="text" placeholder="অপশন ${i+1}" value="${esc(o.text)}" data-action="option-text" data-index="${i}">
+      ${opts.length > 2 ? `<button class="secondary" style="padding:6px 10px;font-size:13px" data-action="remove-option" data-index="${i}">✕</button>` : ''}
+    </div>`;
+  });
+
+  return `<button class="back-link" data-action="back-to-detail">← ${esc(ex.title)}-এ ফিরুন</button>
+  <div class="card">
+    <label>প্রশ্ন</label>
+    <textarea id="newQText" placeholder="যেমন: বাংলাদেশের রাজধানী কোনটি?"></textarea>
+    <div id="qErr" class="err" style="display:none"></div>
+
+    <label>অপশনসমূহ (সঠিক উত্তরের পাশে রেডিও বাটনে ক্লিক করুন)</label>
+    <div id="optionsContainer">${optsHtml}</div>
+    <button class="secondary" style="margin-bottom:16px" data-action="add-option">+ আরেকটি অপশন</button>
+
+    <label>ব্যাখ্যা (ঐচ্ছিক — ভুল উত্তর দিলে স্টুডেন্ট এটা দেখবে)</label>
+    <textarea id="newQExp" placeholder="কেন এই উত্তরটি সঠিক তার ব্যাখ্যা লিখুন"></textarea>
+
+    <button data-action="submit-question">প্রশ্ন যোগ করুন</button>
+  </div>`;
+}
+
+function renderTeacherResults() {
+  if (state.results.length === 0) {
+    return '<div class="card"><div class="empty">এখনো কেউ পরীক্ষা দেয়নি।</div></div>';
+  }
+  let html = `<div class="toolbar">
+    <h2>মোট ${state.results.length}টি জমা</h2>
+    <button class="secondary" data-action="export-csv">CSV ডাউনলোড করুন</button>
+  </div>`;
+
+  let rows = '';
+  state.results.forEach(r => {
+    const ex = getExam(r.examId);
+    const pct = r.total > 0 ? Math.round((r.score / r.total) * 100) : 0;
+    const date = new Date(r.submittedAt);
+    const dateStr = date.toLocaleDateString('bn-BD', {day:'numeric', month:'short'}) + ' ' + date.toLocaleTimeString('bn-BD', {hour:'2-digit', minute:'2-digit'});
+    rows += `<tr>
+      <td>${esc(r.studentName)}</td>
+      <td>${esc(ex ? ex.title : 'মুছে ফেলা পরীক্ষা')}</td>
+      <td>${r.score} / ${r.total}</td>
+      <td>${pct}%</td>
+      <td>${dateStr}</td>
+    </tr>`;
+  });
+  html += `<div class="card">
+    <table>
+      <tr><th>নাম</th><th>পরীক্ষা</th><th>স্কোর</th><th>শতাংশ</th><th>সময়</th></tr>
+      ${rows}
+    </table>
+  </div>`;
+  return html;
+}
+
+function bindTeacherEvents() {
+  const container = document.getElementById('content');
+
+  const loginBtn = container.querySelector('[data-action="teacher-login"]');
+  if (loginBtn) {
+    loginBtn.addEventListener('click', doTeacherLogin);
+    const passInput = container.querySelector('#teacherPass');
+    if (passInput) passInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doTeacherLogin(); });
+  }
+
+  container.querySelectorAll('.subtab-btn').forEach(btn => {
+    btn.addEventListener('click', () => setTeacherView(btn.dataset.view));
+  });
+
+  container.querySelectorAll('[data-action="open-exam"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.teacherExamId = btn.dataset.id;
+      state.teacherView = 'examDetail';
+      render();
+    });
+  });
+
+  container.querySelectorAll('[data-action="delete-exam"]').forEach(btn => {
+    btn.addEventListener('click', () => deleteExam(btn.dataset.id));
+  });
+
+  const createExamBtn = container.querySelector('[data-action="create-exam"]');
+  if (createExamBtn) createExamBtn.addEventListener('click', createExam);
+
+  const backToExams = container.querySelector('[data-action="back-to-exams"]');
+  if (backToExams) backToExams.addEventListener('click', () => { state.teacherView = 'exams'; render(); });
+
+  const backToDetail = container.querySelector('[data-action="back-to-detail"]');
+  if (backToDetail) backToDetail.addEventListener('click', () => { state.teacherView = 'examDetail'; render(); });
+
+  const addQTo = container.querySelector('[data-action="add-question-to"]');
+  if (addQTo) addQTo.addEventListener('click', () => {
+    state.editingOptions = [{text:'', correct:true}, {text:'', correct:false}];
+    state.teacherView = 'addQuestion';
+    render();
+  });
+
+  container.querySelectorAll('[data-action="delete-question"]').forEach(btn => {
+    btn.addEventListener('click', () => deleteQuestion(btn.dataset.id));
+  });
+
+  container.querySelectorAll('[data-action="set-correct"]').forEach(el => {
+    el.addEventListener('change', () => setCorrectOption(parseInt(el.dataset.index, 10)));
+  });
+  container.querySelectorAll('[data-action="option-text"]').forEach(el => {
+    el.addEventListener('input', () => updateOptionText(parseInt(el.dataset.index, 10), el.value));
+  });
+  container.querySelectorAll('[data-action="remove-option"]').forEach(btn => {
+    btn.addEventListener('click', () => removeOption(parseInt(btn.dataset.index, 10)));
+  });
+  const addOptBtn = container.querySelector('[data-action="add-option"]');
+  if (addOptBtn) addOptBtn.addEventListener('click', addOption);
+
+  const submitQBtn = container.querySelector('[data-action="submit-question"]');
+  if (submitQBtn) submitQBtn.addEventListener('click', submitQuestion);
+
+  const exportBtn = container.querySelector('[data-action="export-csv"]');
+  if (exportBtn) exportBtn.addEventListener('click', exportResultsCsv);
+}
+
+function doTeacherLogin() {
+  const passInput = document.getElementById('teacherPass');
+  const errEl = document.getElementById('loginErr');
+  if (passInput.value === TEACHER_PASSWORD) {
+    state.authed = true;
+    state.teacherView = 'exams';
+    render();
+  } else {
+    errEl.textContent = 'পাসওয়ার্ড ভুল হয়েছে।';
+    errEl.style.display = 'block';
+  }
+}
+
+function setTeacherView(v) {
+  state.teacherView = v;
+  render();
+}
+
+async function createExam() {
+  const title = document.getElementById('newExamTitle').value.trim();
+  const durationRaw = document.getElementById('newExamDuration').value.trim();
+  const errEl = document.getElementById('examErr2');
+
+  if (!title) {
+    errEl.textContent = 'পরীক্ষার নাম লিখুন।';
+    errEl.style.display = 'block';
+    return;
+  }
+  const durationMin = durationRaw ? parseInt(durationRaw, 10) : null;
+  if (durationRaw && (isNaN(durationMin) || durationMin <= 0)) {
+    errEl.textContent = 'সময়সীমা একটি সঠিক সংখ্যা হতে হবে।';
+    errEl.style.display = 'block';
+    return;
+  }
+  errEl.style.display = 'none';
+
+  const { data, error } = await sb
+    .from('exams')
+    .insert({ title, duration_min: durationMin })
+    .select()
+    .single();
+
+  if (error) {
+    errEl.textContent = 'পরীক্ষা তৈরি করতে সমস্যা হয়েছে: ' + error.message;
+    errEl.style.display = 'block';
+    return;
+  }
+
+  await loadAll();
+  state.teacherExamId = data.id;
+  state.teacherView = 'examDetail';
+  render();
+}
+
+async function deleteExam(id) {
+  if (!confirm('এই পরীক্ষাটি ও এর সব প্রশ্ন মুছে ফেলা হবে। নিশ্চিত?')) return;
+  const { error } = await sb.from('exams').delete().eq('id', id);
+  if (error) { alert('মুছতে সমস্যা হয়েছে: ' + error.message); return; }
+  await loadAll();
+  render();
+}
+
+function addOption() {
+  state.editingOptions.push({text:'', correct:false});
+  render();
+}
+function removeOption(i) {
+  state.editingOptions.splice(i, 1);
+  if (!state.editingOptions.some(o => o.correct)) state.editingOptions[0].correct = true;
+  render();
+}
+function setCorrectOption(i) {
+  state.editingOptions.forEach((o, oi) => o.correct = (oi === i));
+}
+function updateOptionText(i, val) {
+  state.editingOptions[i].text = val;
+}
+
+async function submitQuestion() {
+  const ex = getExam(state.teacherExamId);
+  if (!ex) return;
+
+  const text = document.getElementById('newQText').value.trim();
+  const exp = document.getElementById('newQExp').value.trim();
+  const errEl = document.getElementById('qErr');
+  const opts = state.editingOptions.map(o => o.text.trim());
+
+  if (!text) {
+    errEl.textContent = 'প্রশ্ন লিখুন।';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (opts.some(o => !o)) {
+    errEl.textContent = 'সবগুলো অপশন পূরণ করুন।';
+    errEl.style.display = 'block';
+    return;
+  }
+  errEl.style.display = 'none';
+
+  const correctIndex = state.editingOptions.findIndex(o => o.correct);
+
+  const { data: qData, error: qError } = await sb
+    .from('questions')
+    .insert({ exam_id: ex.id, text, explanation: exp || null, correct_index: correctIndex })
+    .select()
+    .single();
+
+  if (qError) {
+    errEl.textContent = 'প্রশ্ন যোগ করতে সমস্যা হয়েছে: ' + qError.message;
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const optionRows = opts.map((text, i) => ({
+    question_id: qData.id,
+    option_text: text,
+    option_order: i
+  }));
+  const { error: oError } = await sb.from('options').insert(optionRows);
+  if (oError) {
+    errEl.textContent = 'অপশন যোগ করতে সমস্যা হয়েছে: ' + oError.message;
+    errEl.style.display = 'block';
+    return;
+  }
+
+  await loadAll();
+  state.teacherView = 'examDetail';
+  render();
+}
+
+async function deleteQuestion(id) {
+  const { error } = await sb.from('questions').delete().eq('id', id);
+  if (error) { alert('মুছতে সমস্যা হয়েছে: ' + error.message); return; }
+  await loadAll();
+  render();
+}
+
+function exportResultsCsv() {
+  const header = ['নাম', 'পরীক্ষা', 'স্কোর', 'মোট', 'শতাংশ', 'জমার সময়'];
+  const rows = [header];
+  state.results.forEach(r => {
+    const ex = getExam(r.examId);
+    const pct = r.total > 0 ? Math.round((r.score / r.total) * 100) : 0;
+    rows.push([
+      r.studentName,
+      ex ? ex.title : 'মুছে ফেলা পরীক্ষা',
+      r.score, r.total, pct + '%',
+      new Date(r.submittedAt).toLocaleString('bn-BD')
+    ]);
+  });
+
+  const csv = '\uFEFF' + rows.map(row =>
+    row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+  ).join('\r\n');
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'exam-results.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ================= STUDENT =================
+
+function renderStudent() {
+  if (state.studentView === 'name') return renderStudentName();
+  if (state.studentView === 'exam') return renderStudentExam();
+  if (state.studentView === 'result') return renderStudentResult();
+  return renderStudentExamList();
+}
+
+function renderStudentExamList() {
+  if (state.exams.length === 0) {
+    return '<div class="card"><div class="empty">এখনো কোনো পরীক্ষা তৈরি করা হয়নি। শিক্ষক ট্যাব থেকে পরীক্ষা তৈরি করুন।</div></div>';
+  }
+  let html = '';
+  state.exams.forEach(ex => {
+    const count = ex.questions.length;
+    html += `<div class="exam-card">
+      <div class="info">
+        <div class="name">${esc(ex.title)}</div>
+        <div class="meta">${count}টি প্রশ্ন${ex.durationMin ? ' · ' + ex.durationMin + ' মিনিট' : ''}</div>
+      </div>
+      <div class="actions">
+        <button data-action="pick-exam" data-id="${ex.id}" ${count === 0 ? 'disabled' : ''}>পরীক্ষা দিন</button>
+      </div>
+    </div>`;
+  });
+  return html;
+}
+
+function renderStudentName() {
+  const ex = getExam(state.activeExamId);
+  if (!ex) return '<div class="card"><div class="empty">পরীক্ষাটি পাওয়া যায়নি।</div></div>';
+  return `<button class="back-link" data-action="back-to-list">← পরীক্ষার তালিকায় ফিরুন</button>
+  <div class="card">
+    <div style="font-weight:500; margin-bottom:14px">${esc(ex.title)}</div>
+    <label>আপনার নাম লিখুন</label>
+    <input type="text" id="studentNameInput" placeholder="যেমন: রহিম উদ্দিন">
+    <div id="nameErr" class="err" style="display:none"></div>
+    <button data-action="start-exam">পরীক্ষা শুরু করুন</button>
+  </div>`;
+}
+
+function renderStudentExam() {
+  const ex = getExam(state.activeExamId);
+  if (!ex) return '<div class="card"><div class="empty">পরীক্ষাটি পাওয়া যায়নি।</div></div>';
+
+  let html = '';
+  if (ex.durationMin) {
+    html += `<div class="timer" id="timerBox">সময় বাকি: --:--</div>`;
+  }
+  html += '<div class="card">';
+  ex.questions.forEach((q, qi) => {
+    html += `<div class="exam-q">
+      <div class="qn">প্রশ্ন ${qi+1} / ${ex.questions.length}</div>
+      <div class="qtext">${esc(q.text)}</div>`;
+    q.options.forEach((o, oi) => {
+      const selected = state.answers[q.id] === oi;
+      html += `<label class="choice ${selected ? 'selected' : ''}">
+        <input type="radio" name="q_${q.id}" ${selected ? 'checked' : ''} data-action="select-answer" data-qid="${q.id}" data-oi="${oi}">
+        <span>${esc(o)}</span>
+      </label>`;
+    });
+    html += '</div>';
+  });
+  html += `<div id="examErr" class="err" style="display:none"></div>
+    <button data-action="submit-exam">জমা দিন</button>
+  </div>`;
+  return html;
+}
+
+function renderStudentResult() {
+  const ex = getExam(state.activeExamId);
+  const r = state.lastResult;
+  if (!ex || !r) return '<div class="card"><div class="empty">ফলাফল পাওয়া যায়নি।</div></div>';
+
+  const pct = Math.round((r.score / r.total) * 100);
+  let html = `<div class="score-box">
+    <div class="num">${r.score} / ${r.total}</div>
+    <div class="lbl">${esc(r.studentName)} — ${esc(ex.title)} — ${pct}% সঠিক</div>
+  </div>`;
+
+  ex.questions.forEach((q, qi) => {
+    const given = r.answers[q.id];
+    const isCorrect = given === q.correctIndex;
+    html += `<div class="result-item ${isCorrect ? 'correct' : 'wrong'}">
+      <div class="tag">${isCorrect ? '✓ সঠিক' : '✗ ভুল'}</div>
+      <div style="font-weight:500">${qi+1}. ${esc(q.text)}</div>
+      <div style="font-size:14px;margin-top:4px">আপনার উত্তর: ${esc(q.options[given] ?? '—')}</div>`;
+    if (!isCorrect) {
+      html += `<div style="font-size:14px;color:#3B6D11">সঠিক উত্তর: ${esc(q.options[q.correctIndex])}</div>`;
+    }
+    if (q.explanation) {
+      html += `<div class="exp">ব্যাখ্যা: ${esc(q.explanation)}</div>`;
+    }
+    html += '</div>';
+  });
+
+  html += `<button class="secondary" data-action="back-to-list-from-result">পরীক্ষার তালিকায় ফিরুন</button>`;
+  return html;
+}
+
+function bindStudentEvents() {
+  const container = document.getElementById('content');
+
+  container.querySelectorAll('[data-action="pick-exam"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.activeExamId = btn.dataset.id;
+      state.studentView = 'name';
+      render();
+    });
+  });
+
+  const backToList = container.querySelector('[data-action="back-to-list"]');
+  if (backToList) backToList.addEventListener('click', () => { state.studentView = 'list'; render(); });
+
+  const backToListResult = container.querySelector('[data-action="back-to-list-from-result"]');
+  if (backToListResult) backToListResult.addEventListener('click', async () => {
+    stopTimer();
+    state.studentView = 'list';
+    state.activeExamId = null;
+    await loadAll();
+    render();
+  });
+
+  const startBtn = container.querySelector('[data-action="start-exam"]');
+  if (startBtn) startBtn.addEventListener('click', startExam);
+
+  container.querySelectorAll('[data-action="select-answer"]').forEach(el => {
+    el.addEventListener('change', () => selectAnswer(el.dataset.qid, parseInt(el.dataset.oi, 10)));
+  });
+
+  const submitBtn = container.querySelector('[data-action="submit-exam"]');
+  if (submitBtn) submitBtn.addEventListener('click', () => submitExam(false));
+
+  if (state.studentView === 'exam') startTimerIfNeeded();
+}
+
+async function startExam() {
+  const ex = getExam(state.activeExamId);
+  if (!ex) return;
+  const nameInput = document.getElementById('studentNameInput');
+  const name = nameInput.value.trim();
+  const errEl = document.getElementById('nameErr');
+  if (!name) {
+    errEl.textContent = 'অনুগ্রহ করে আপনার নাম লিখুন।';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const { data: existing, error } = await sb
+    .from('results')
+    .select('id')
+    .eq('exam_id', ex.id)
+    .ilike('student_name', name);
+
+  if (error) {
+    errEl.textContent = 'যাচাই করতে সমস্যা হয়েছে, আবার চেষ্টা করুন।';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (existing && existing.length > 0) {
+    errEl.textContent = 'এই নামে আপনি ইতিমধ্যে এই পরীক্ষাটি দিয়েছেন। একই পরীক্ষা দ্বিতীয়বার দেওয়া যাবে না।';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  state.studentName = name;
+  state.answers = {};
+  state.studentView = 'exam';
+  render();
+}
+
+function selectAnswer(qId, oi) {
+  state.answers[qId] = oi;
+  render();
+}
+
+function startTimerIfNeeded() {
+  stopTimer();
+  const ex = getExam(state.activeExamId);
+  if (!ex || !ex.durationMin) return;
+
+  if (state.timeLeftSec === null) {
+    state.timeLeftSec = ex.durationMin * 60;
+  }
+  updateTimerDisplay();
+
+  state.timerInterval = setInterval(() => {
+    state.timeLeftSec--;
+    if (state.timeLeftSec <= 0) {
+      stopTimer();
+      submitExam(true);
+      return;
+    }
+    updateTimerDisplay();
+  }, 1000);
+}
+
+function updateTimerDisplay() {
+  const box = document.getElementById('timerBox');
+  if (!box) return;
+  const m = Math.floor(state.timeLeftSec / 60);
+  const s = state.timeLeftSec % 60;
+  box.textContent = `সময় বাকি: ${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  box.classList.toggle('low', state.timeLeftSec <= 30);
+}
+
+function stopTimer() {
+  if (state.timerInterval) {
+    clearInterval(state.timerInterval);
+    state.timerInterval = null;
+  }
+  state.timeLeftSec = null;
+}
+
+async function submitExam(autoSubmitted) {
+  const ex = getExam(state.activeExamId);
+  if (!ex) return;
+
+  if (!autoSubmitted) {
+    const unanswered = ex.questions.filter(q => state.answers[q.id] === undefined);
+    const errEl = document.getElementById('examErr');
+    if (unanswered.length > 0) {
+      errEl.textContent = `${unanswered.length}টি প্রশ্নের উত্তর দেওয়া বাকি আছে।`;
+      errEl.style.display = 'block';
+      return;
+    }
+  }
+
+  stopTimer();
+
+  let score = 0;
+  ex.questions.forEach(q => {
+    if (state.answers[q.id] === q.correctIndex) score++;
+  });
+
+  const answersToSave = {...state.answers};
+
+  const { data, error } = await sb
+    .from('results')
+    .insert({
+      exam_id: ex.id,
+      student_name: state.studentName,
+      score, total: ex.questions.length,
+      answers: answersToSave
+    })
+    .select()
+    .single();
+
+  if (error) {
+    alert('রেজাল্ট সেভ করতে সমস্যা হয়েছে: ' + error.message);
+    return;
+  }
+
+  state.lastResult = {
+    id: data.id, examId: ex.id, studentName: state.studentName,
+    score, total: ex.questions.length, answers: answersToSave, submittedAt: data.submitted_at
+  };
+  state.results.unshift(state.lastResult);
+  state.studentView = 'result';
+  render();
+}
+
+document.getElementById('mainTabStudent').addEventListener('click', () => switchTab('student'));
+document.getElementById('mainTabTeacher').addEventListener('click', () => switchTab('teacher'));
+
+loadAll();
+</script>
+</body>
+</html>
