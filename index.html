@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ফাংশন ক্যরিয়ার সেন্টার</title>
+<title>পরীক্ষা সিস্টেম</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Baloo+Da+2:wght@500;600;700;800&family=Hind+Siliguri:wght@400;500;600;700&display=swap');
@@ -66,7 +66,7 @@
     box-shadow: 0 4px 18px rgba(108,79,246,0.10);
   }
   label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 6px; font-weight: 700; letter-spacing: 0.2px; }
-  input[type=text], input[type=number], input[type=password], input[type=tel], textarea, select {
+  input[type=text], input[type=number], input[type=password], input[type=tel], input[type=datetime-local], textarea, select {
     width: 100%; padding: 12px 14px; border: 2px solid var(--border); border-radius: 12px;
     font-size: 15px; font-family: inherit; margin-bottom: 14px; background: var(--paper);
     color: var(--ink); transition: border-color 0.15s;
@@ -224,7 +224,7 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>📚 ফাংশন স্কিল এন্ড ক্যারিয়ার সেন্টার</h1>
+  <h1>📚 পরীক্ষার খাতা</h1>
   <p class="sub" id="subtitle">লোড হচ্ছে...</p>
 
   <div class="tabs">
@@ -337,6 +337,8 @@ async function loadAll() {
       id: ex.id,
       title: ex.title,
       durationMin: ex.duration_min,
+      startsAt: ex.starts_at,
+      endsAt: ex.ends_at,
       questions: questionsWithOptions.filter(q => {
         const orig = questions.find(qq => qq.id === q.id);
         return orig.exam_id === ex.id;
@@ -425,10 +427,13 @@ function renderExamList() {
   state.exams.forEach(ex => {
     const count = ex.questions.length;
     const attempts = state.results.filter(r => r.examId === ex.id).length;
+    const windowStr = (ex.startsAt || ex.endsAt)
+      ? ' · ⏰ ' + (ex.startsAt ? formatBnDateTime(new Date(ex.startsAt)) : 'যেকোনো সময়') + ' থেকে ' + (ex.endsAt ? formatBnDateTime(new Date(ex.endsAt)) : 'অসীম')
+      : '';
     html += `<div class="exam-card">
       <div class="info">
         <div class="name">${esc(ex.title)}</div>
-        <div class="meta">${count}টি প্রশ্ন${ex.durationMin ? ' · ' + ex.durationMin + ' মিনিট' : ' · সময়সীমা নেই'} · ${attempts}টি জমা</div>
+        <div class="meta">${count}টি প্রশ্ন${ex.durationMin ? ' · ' + ex.durationMin + ' মিনিট' : ' · সময়সীমা নেই'} · ${attempts}টি জমা${windowStr}</div>
       </div>
       <div class="actions">
         <button class="secondary" data-action="copy-link" data-id="${ex.id}">লিংক কপি</button>
@@ -446,6 +451,10 @@ function renderAddExam() {
     <input type="text" id="newExamTitle" placeholder="যেমন: সাধারণ জ্ঞান - সেট ১">
     <label>সময়সীমা (মিনিট, খালি রাখলে সময়সীমা থাকবে না)</label>
     <input type="number" id="newExamDuration" placeholder="যেমন: 15" min="1">
+    <label>পরীক্ষা শুরু হবে (ঐচ্ছিক — খালি রাখলে যেকোনো সময় দেওয়া যাবে)</label>
+    <input type="datetime-local" id="newExamStart">
+    <label>পরীক্ষা শেষ হবে (ঐচ্ছিক)</label>
+    <input type="datetime-local" id="newExamEnd">
     <div id="examErr2" class="err" style="display:none"></div>
     <button data-action="create-exam">পরীক্ষা তৈরি করুন</button>
   </div>`;
@@ -635,6 +644,8 @@ function setTeacherView(v) {
 async function createExam() {
   const title = document.getElementById('newExamTitle').value.trim();
   const durationRaw = document.getElementById('newExamDuration').value.trim();
+  const startRaw = document.getElementById('newExamStart').value;
+  const endRaw = document.getElementById('newExamEnd').value;
   const errEl = document.getElementById('examErr2');
 
   if (!title) {
@@ -648,11 +659,18 @@ async function createExam() {
     errEl.style.display = 'block';
     return;
   }
+  const startsAt = startRaw ? new Date(startRaw).toISOString() : null;
+  const endsAt = endRaw ? new Date(endRaw).toISOString() : null;
+  if (startsAt && endsAt && new Date(endsAt) <= new Date(startsAt)) {
+    errEl.textContent = 'শেষ সময় অবশ্যই শুরুর সময়ের পরে হতে হবে।';
+    errEl.style.display = 'block';
+    return;
+  }
   errEl.style.display = 'none';
 
   const { data, error } = await sb
     .from('exams')
-    .insert({ title, duration_min: durationMin })
+    .insert({ title, duration_min: durationMin, starts_at: startsAt, ends_at: endsAt })
     .select()
     .single();
 
@@ -837,32 +855,62 @@ function renderStudentExamList() {
   let html = '';
   state.exams.forEach(ex => {
     const count = ex.questions.length;
+    const windowCheck = checkExamWindow(ex);
+    const windowStr = (ex.startsAt || ex.endsAt)
+      ? ' · ⏰ ' + (ex.startsAt ? formatBnDateTime(new Date(ex.startsAt)) : 'যেকোনো সময়') + ' থেকে ' + (ex.endsAt ? formatBnDateTime(new Date(ex.endsAt)) : 'অসীম')
+      : '';
     html += `<div class="exam-card">
       <div class="info">
         <div class="name">${esc(ex.title)}</div>
-        <div class="meta">${count}টি প্রশ্ন${ex.durationMin ? ' · ' + ex.durationMin + ' মিনিট' : ''}</div>
+        <div class="meta">${count}টি প্রশ্ন${ex.durationMin ? ' · ' + ex.durationMin + ' মিনিট' : ''}${windowStr}</div>
       </div>
       <div class="actions">
-        <button data-action="pick-exam" data-id="${ex.id}" ${count === 0 ? 'disabled' : ''}>পরীক্ষা দিন</button>
+        <button data-action="pick-exam" data-id="${ex.id}" ${(count === 0 || !windowCheck.ok) ? 'disabled' : ''}>পরীক্ষা দিন</button>
       </div>
     </div>`;
   });
   return html;
 }
 
+function checkExamWindow(ex) {
+  const now = new Date();
+  if (ex.startsAt && now < new Date(ex.startsAt)) {
+    return { ok: false, message: `এই পরীক্ষাটি এখনো শুরু হয়নি। শুরু হবে: ${formatBnDateTime(new Date(ex.startsAt))}` };
+  }
+  if (ex.endsAt && now > new Date(ex.endsAt)) {
+    return { ok: false, message: `এই পরীক্ষার সময় শেষ হয়ে গেছে। শেষ সময় ছিল: ${formatBnDateTime(new Date(ex.endsAt))}` };
+  }
+  return { ok: true };
+}
+
 function renderStudentName() {
   const ex = getExam(state.activeExamId);
   if (!ex) return '<div class="card"><div class="empty">পরীক্ষাটি পাওয়া যায়নি। লিংকটি ভুল হতে পারে।</div></div>';
   const backLink = state.lockedExamId ? '' : `<button class="back-link" data-action="back-to-list">← পরীক্ষার তালিকায় ফিরুন</button>`;
+
+  const windowCheck = checkExamWindow(ex);
+  let windowNotice = '';
+  if (!windowCheck.ok) {
+    windowNotice = `<div class="err" style="margin-bottom:14px;">${windowCheck.message}</div>`;
+  } else if (ex.startsAt || ex.endsAt) {
+    const parts = [];
+    if (ex.startsAt) parts.push('শুরু: ' + formatBnDateTime(new Date(ex.startsAt)));
+    if (ex.endsAt) parts.push('শেষ: ' + formatBnDateTime(new Date(ex.endsAt)));
+    windowNotice = `<div class="hint" style="margin-bottom:14px;">⏰ ${parts.join(' · ')}</div>`;
+  }
+
+  const disabled = windowCheck.ok ? '' : 'disabled';
+
   return `${backLink}
   <div class="card">
     <div style="font-weight:500; margin-bottom:14px">${esc(ex.title)}</div>
+    ${windowNotice}
     <label>আপনার নাম লিখুন</label>
-    <input type="text" id="studentNameInput" placeholder="যেমন: রহিম উদ্দিন">
+    <input type="text" id="studentNameInput" placeholder="যেমন: রহিম উদ্দিন" ${disabled}>
     <label>মোবাইল নাম্বার লিখুন</label>
-    <input type="tel" id="studentPhoneInput" placeholder="যেমন: ০১৭xxxxxxxx" inputmode="numeric">
+    <input type="tel" id="studentPhoneInput" placeholder="যেমন: ০১৭xxxxxxxx" inputmode="numeric" ${disabled}>
     <div id="nameErr" class="err" style="display:none"></div>
-    <button data-action="start-exam">পরীক্ষা শুরু করুন</button>
+    <button data-action="start-exam" ${disabled}>পরীক্ষা শুরু করুন</button>
   </div>`;
 }
 
@@ -1105,11 +1153,19 @@ function bindStudentEvents() {
 async function startExam() {
   const ex = getExam(state.activeExamId);
   if (!ex) return;
+  const errEl = document.getElementById('nameErr');
+
+  const windowCheck = checkExamWindow(ex);
+  if (!windowCheck.ok) {
+    errEl.textContent = windowCheck.message;
+    errEl.style.display = 'block';
+    return;
+  }
+
   const nameInput = document.getElementById('studentNameInput');
   const phoneInput = document.getElementById('studentPhoneInput');
   const name = nameInput.value.trim();
   const phone = phoneInput.value.trim();
-  const errEl = document.getElementById('nameErr');
 
   if (!name) {
     errEl.textContent = 'অনুগ্রহ করে আপনার নাম লিখুন।';
@@ -1123,7 +1179,7 @@ async function startExam() {
   }
   const digitsOnly = phone.replace(/\D/g, '');
   if (digitsOnly.length < 10) {
-    errEl.textContent = 'সঠিক মোবাইল নাম্বার ইংরেজিতে লিখুন।';
+    errEl.textContent = 'সঠিক মোবাইল নাম্বার লিখুন।';
     errEl.style.display = 'block';
     return;
   }
