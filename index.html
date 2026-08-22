@@ -62,6 +62,13 @@
   .exam-card .meta { font-size: 13px; color: #888780; }
   .exam-card .actions { display: flex; gap: 6px; flex-shrink: 0; }
   .exam-card .actions button { padding: 7px 12px; font-size: 13px; }
+  .copy-toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: #2C2C2A; color: #fff; padding: 10px 18px; border-radius: 8px;
+    font-size: 14px; z-index: 50; opacity: 0; transition: opacity 0.2s;
+    pointer-events: none;
+  }
+  .copy-toast.show { opacity: 1; }
 
   .q-item { border: 1px solid #E4E2D8; border-radius: 10px; padding: 14px; margin-bottom: 10px; }
   .q-item .q-text { font-weight: 500; margin-bottom: 8px; }
@@ -152,6 +159,7 @@ let state = {
 
   studentView: 'list',
   activeExamId: null,
+  lockedExamId: null,
   studentName: '',
   answers: {},
   lastResult: null,
@@ -309,6 +317,7 @@ function renderExamList() {
         <div class="meta">${count}টি প্রশ্ন${ex.durationMin ? ' · ' + ex.durationMin + ' মিনিট' : ' · সময়সীমা নেই'} · ${attempts}টি জমা</div>
       </div>
       <div class="actions">
+        <button class="secondary" data-action="copy-link" data-id="${ex.id}">লিংক কপি</button>
         <button class="secondary" data-action="open-exam" data-id="${ex.id}">দেখুন</button>
         <button class="danger" data-action="delete-exam" data-id="${ex.id}">মুছুন</button>
       </div>
@@ -447,6 +456,10 @@ function bindTeacherEvents() {
     btn.addEventListener('click', () => deleteExam(btn.dataset.id));
   });
 
+  container.querySelectorAll('[data-action="copy-link"]').forEach(btn => {
+    btn.addEventListener('click', () => copyExamLink(btn.dataset.id));
+  });
+
   const createExamBtn = container.querySelector('[data-action="create-exam"]');
   if (createExamBtn) createExamBtn.addEventListener('click', createExam);
 
@@ -546,6 +559,24 @@ async function deleteExam(id) {
   if (error) { alert('মুছতে সমস্যা হয়েছে: ' + error.message); return; }
   await loadAll();
   render();
+}
+
+function copyExamLink(id) {
+  const url = `${window.location.origin}${window.location.pathname}?exam=${id}`;
+  const showToast = () => {
+    const toast = document.createElement('div');
+    toast.className = 'copy-toast show';
+    toast.textContent = 'লিংক কপি হয়েছে!';
+    document.body.appendChild(toast);
+    setTimeout(() => { toast.remove(); }, 1800);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(showToast).catch(() => {
+      prompt('লিংকটি কপি করুন:', url);
+    });
+  } else {
+    prompt('লিংকটি কপি করুন:', url);
+  }
 }
 
 function addOption() {
@@ -683,8 +714,9 @@ function renderStudentExamList() {
 
 function renderStudentName() {
   const ex = getExam(state.activeExamId);
-  if (!ex) return '<div class="card"><div class="empty">পরীক্ষাটি পাওয়া যায়নি।</div></div>';
-  return `<button class="back-link" data-action="back-to-list">← পরীক্ষার তালিকায় ফিরুন</button>
+  if (!ex) return '<div class="card"><div class="empty">পরীক্ষাটি পাওয়া যায়নি। লিংকটি ভুল হতে পারে।</div></div>';
+  const backLink = state.lockedExamId ? '' : `<button class="back-link" data-action="back-to-list">← পরীক্ষার তালিকায় ফিরুন</button>`;
+  return `${backLink}
   <div class="card">
     <div style="font-weight:500; margin-bottom:14px">${esc(ex.title)}</div>
     <label>আপনার নাম লিখুন</label>
@@ -749,7 +781,9 @@ function renderStudentResult() {
     html += '</div>';
   });
 
-  html += `<button class="secondary" data-action="back-to-list-from-result">পরীক্ষার তালিকায় ফিরুন</button>`;
+  if (!state.lockedExamId) {
+    html += `<button class="secondary" data-action="back-to-list-from-result">পরীক্ষার তালিকায় ফিরুন</button>`;
+  }
   return html;
 }
 
@@ -917,6 +951,17 @@ async function submitExam(autoSubmitted) {
 
 document.getElementById('mainTabStudent').addEventListener('click', () => switchTab('student'));
 document.getElementById('mainTabTeacher').addEventListener('click', () => switchTab('teacher'));
+
+// URL এ ?exam=xxxx থাকলে সরাসরি সেই পরীক্ষায় নিয়ে যাওয়া, লিংক-নির্দিষ্ট মোড চালু রাখা
+const urlParams = new URLSearchParams(window.location.search);
+const linkedExamId = urlParams.get('exam');
+if (linkedExamId) {
+  state.lockedExamId = linkedExamId;
+  state.activeExamId = linkedExamId;
+  state.studentView = 'name';
+  // এই মোডে শিক্ষার্থীদের জন্য শিক্ষক ট্যাব লুকানো হবে
+  document.getElementById('mainTabTeacher').style.display = 'none';
+}
 
 loadAll();
 </script>
