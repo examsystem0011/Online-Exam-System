@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ফাংশন</title>
+<title>পরীক্ষা সিস্টেম</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Baloo+Da+2:wght@500;600;700;800&family=Hind+Siliguri:wght@400;500;600;700&display=swap');
@@ -224,7 +224,7 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>📚 ফাংশন স্কিলস এন্ড ক্যারিয়ার সেন্টার</h1>
+  <h1>📚 পরীক্ষার খাতা</h1>
   <p class="sub" id="subtitle">লোড হচ্ছে...</p>
 
   <div class="tabs">
@@ -470,6 +470,16 @@ function renderExamDetail() {
     <button data-action="add-question-to" data-id="${ex.id}">+ প্রশ্ন যোগ করুন</button>
   </div>`;
 
+  if (ex.startsAt || ex.endsAt) {
+    const parts = [];
+    if (ex.startsAt) parts.push('শুরু: ' + formatBnDateTime(new Date(ex.startsAt)));
+    if (ex.endsAt) parts.push('শেষ: ' + formatBnDateTime(new Date(ex.endsAt)));
+    html += `<div class="card" style="margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+      <div>⏰ <b>সময়সীমা:</b> ${parts.join(' · ')}</div>
+      <button class="secondary" data-action="clear-exam-window" data-id="${ex.id}">সময়সীমা তুলে দিন (সবার জন্য উন্মুক্ত করুন)</button>
+    </div>`;
+  }
+
   if (ex.questions.length === 0) {
     html += '<div class="card"><div class="empty">এই পরীক্ষায় এখনো কোনো প্রশ্ন নেই।</div></div>';
   } else {
@@ -578,6 +588,10 @@ function bindTeacherEvents() {
 
   container.querySelectorAll('[data-action="delete-exam"]').forEach(btn => {
     btn.addEventListener('click', () => deleteExam(btn.dataset.id));
+  });
+
+  container.querySelectorAll('[data-action="clear-exam-window"]').forEach(btn => {
+    btn.addEventListener('click', () => clearExamWindow(btn.dataset.id));
   });
 
   container.querySelectorAll('[data-action="copy-link"]').forEach(btn => {
@@ -690,6 +704,17 @@ async function deleteExam(id) {
   if (!confirm('এই পরীক্ষাটি ও এর সব প্রশ্ন মুছে ফেলা হবে। নিশ্চিত?')) return;
   const { error } = await sb.from('exams').delete().eq('id', id);
   if (error) { alert('মুছতে সমস্যা হয়েছে: ' + error.message); return; }
+  await loadAll();
+  render();
+}
+
+async function clearExamWindow(id) {
+  if (!confirm('এই পরীক্ষার সময়সীমা তুলে দেওয়া হবে, এখন থেকে যেকোনো সময় সবাই এটা দিতে পারবে। নিশ্চিত?')) return;
+  const { error } = await sb
+    .from('exams')
+    .update({ starts_at: null, ends_at: null })
+    .eq('id', id);
+  if (error) { alert('আপডেট করতে সমস্যা হয়েছে: ' + error.message); return; }
   await loadAll();
   render();
 }
