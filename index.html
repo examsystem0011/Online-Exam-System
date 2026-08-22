@@ -1123,7 +1123,7 @@ async function startExam() {
   }
   const digitsOnly = phone.replace(/\D/g, '');
   if (digitsOnly.length < 10) {
-    errEl.textContent = 'সঠিক মোবাইল নাম্বার লিখুন।';
+    errEl.textContent = 'সঠিক মোবাইল নাম্বার ইংরেজিতে লিখুন।';
     errEl.style.display = 'block';
     return;
   }
