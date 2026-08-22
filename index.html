@@ -202,6 +202,24 @@
   }
   .back-link:hover { opacity: 0.7; }
   .loading { text-align: center; color: var(--muted); padding: 40px 10px; }
+
+  .lb-row {
+    display: flex; align-items: center; gap: 10px; padding: 10px 8px;
+    border-bottom: 1px solid var(--border); font-size: 14px;
+  }
+  .lb-row:last-child { border-bottom: none; }
+  .lb-rank {
+    width: 26px; height: 26px; border-radius: 50%; background: var(--paper);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 12px; color: var(--primary-dark); flex-shrink: 0;
+  }
+  .lb-name { flex: 1; font-weight: 600; color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lb-score { font-weight: 700; color: var(--muted); font-size: 13px; flex-shrink: 0; }
+  .lb-row.lb-me {
+    background: #F0EBFF; border-radius: 10px; margin: 0 -8px; padding: 10px 16px;
+  }
+  .lb-row.lb-me .lb-rank { background: var(--primary); color: #fff; }
+  .lb-row.lb-me .lb-name, .lb-row.lb-me .lb-score { color: var(--primary-dark); }
 </style>
 </head>
 <body>
@@ -237,6 +255,7 @@ let state = {
   activeExamId: null,
   lockedExamId: null,
   studentName: '',
+  historyStudentName: null,
   answers: {},
   lastResult: null,
   timerInterval: null,
@@ -803,6 +822,7 @@ function renderStudent() {
   if (state.studentView === 'name') return renderStudentName();
   if (state.studentView === 'exam') return renderStudentExam();
   if (state.studentView === 'result') return renderStudentResult();
+  if (state.studentView === 'history') return renderStudentHistory();
   return renderStudentExamList();
 }
 
@@ -898,7 +918,86 @@ function renderStudentResult() {
   if (!state.lockedExamId) {
     html += `<button class="secondary" data-action="back-to-list-from-result">পরীক্ষার তালিকায় ফিরুন</button>`;
   }
+
+  html += renderLeaderboard(ex.id, r);
+  html += `<button class="secondary" data-action="view-my-history" data-name="${esc(r.studentName)}" style="margin-top:10px; width:100%;">আমার সব ফলাফল দেখুন</button>`;
   return html;
+}
+
+function renderStudentHistory() {
+  const name = state.historyStudentName;
+  const myResults = state.results
+    .filter(r => r.studentName.trim().toLowerCase() === (name || '').trim().toLowerCase())
+    .slice()
+    .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+
+  let html = `<button class="back-link" data-action="back-from-history">← ফিরে যান</button>`;
+  html += `<div class="card">
+    <div class="toolbar" style="margin-bottom: 4px;">
+      <h2>📈 ${esc(name)}-এর পারফরম্যান্স</h2>
+      <span class="badge">${toBnNumeral(myResults.length)}টি পরীক্ষা</span>
+    </div>
+  </div>`;
+
+  if (myResults.length === 0) {
+    html += '<div class="card"><div class="empty">এই নামে এখনো কোনো পরীক্ষা দেওয়া হয়নি।</div></div>';
+    return html;
+  }
+
+  const avgPct = Math.round(
+    myResults.reduce((sum, r) => sum + (r.total > 0 ? (r.score / r.total) * 100 : 0), 0) / myResults.length
+  );
+  html += `<div class="score-box" style="margin-bottom: 16px;">
+    <div class="num">${toBnNumeral(avgPct)}%</div>
+    <div class="lbl">গড় স্কোর (${toBnNumeral(myResults.length)}টি পরীক্ষার ভিত্তিতে)</div>
+  </div>`;
+
+  myResults.forEach(r => {
+    const ex = getExam(r.examId);
+    const pct = r.total > 0 ? Math.round((r.score / r.total) * 100) : 0;
+    html += `<div class="exam-card">
+      <div class="info">
+        <div class="name">${esc(ex ? ex.title : 'মুছে ফেলা পরীক্ষা')}</div>
+        <div class="meta">${formatBnDateTime(new Date(r.submittedAt))}</div>
+      </div>
+      <div class="actions">
+        <span class="badge" style="margin-left:0;">${toBnNumeral(r.score)}/${toBnNumeral(r.total)} · ${toBnNumeral(pct)}%</span>
+      </div>
+    </div>`;
+  });
+
+  return html;
+}
+
+function renderLeaderboard(examId, currentResult) {
+  const examResults = state.results
+    .filter(res => res.examId === examId)
+    .slice()
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return new Date(a.submittedAt) - new Date(b.submittedAt);
+    });
+
+  if (examResults.length === 0) return '';
+
+  let rows = '';
+  examResults.forEach((res, i) => {
+    const isMe = res.id === currentResult.id;
+    const pct = res.total > 0 ? Math.round((res.score / res.total) * 100) : 0;
+    rows += `<div class="lb-row ${isMe ? 'lb-me' : ''}">
+      <span class="lb-rank">${toBnNumeral(i + 1)}</span>
+      <span class="lb-name">${esc(res.studentName)}${isMe ? ' (আপনি)' : ''}</span>
+      <span class="lb-score">${toBnNumeral(res.score)}/${toBnNumeral(res.total)} · ${toBnNumeral(pct)}%</span>
+    </div>`;
+  });
+
+  return `<div class="card" style="margin-top:16px;">
+    <div class="toolbar" style="margin-bottom:12px;">
+      <h2>🏆 লিডারবোর্ড</h2>
+      <span class="badge">${toBnNumeral(examResults.length)} জন</span>
+    </div>
+    ${rows}
+  </div>`;
 }
 
 function bindStudentEvents() {
@@ -933,6 +1032,19 @@ function bindStudentEvents() {
 
   const submitBtn = container.querySelector('[data-action="submit-exam"]');
   if (submitBtn) submitBtn.addEventListener('click', () => submitExam(false));
+
+  const historyBtn = container.querySelector('[data-action="view-my-history"]');
+  if (historyBtn) historyBtn.addEventListener('click', () => {
+    state.historyStudentName = historyBtn.dataset.name;
+    state.studentView = 'history';
+    render();
+  });
+
+  const backFromHistory = container.querySelector('[data-action="back-from-history"]');
+  if (backFromHistory) backFromHistory.addEventListener('click', () => {
+    state.studentView = 'result';
+    render();
+  });
 
   if (state.studentView === 'exam') startTimerIfNeeded();
 }
