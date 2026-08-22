@@ -252,6 +252,23 @@ function esc(s) {
   d.textContent = s ?? '';
   return d.innerHTML;
 }
+
+const bnDigits = ['০','১','২','৩','৪','৫','৬','৭','৮','৯'];
+function toBnNumeral(n) {
+  return String(n).split('').map(ch => (ch >= '0' && ch <= '9') ? bnDigits[ch] : ch).join('');
+}
+const bnMonths = ['জানুয়ারি','ফেব্রুয়ারি','মার্চ','এপ্রিল','মে','জুন','জুলাই','আগস্ট','সেপ্টেম্বর','অক্টোবর','নভেম্বর','ডিসেম্বর'];
+function formatBnDateTime(date) {
+  const day = toBnNumeral(date.getDate());
+  const month = bnMonths[date.getMonth()];
+  let hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  if (hours === 0) hours = 12;
+  const timeStr = toBnNumeral(hours) + ' . ' + toBnNumeral(minutes) + ' ' + ampm;
+  return `${day} ${month} — ${timeStr}`;
+}
 function getExam(id) {
   return state.exams.find(e => e.id === id);
 }
@@ -488,7 +505,7 @@ function renderTeacherResults() {
     const ex = getExam(r.examId);
     const pct = r.total > 0 ? Math.round((r.score / r.total) * 100) : 0;
     const date = new Date(r.submittedAt);
-    const dateStr = date.toLocaleDateString('bn-BD', {day:'numeric', month:'long'}) + ' ' + date.toLocaleTimeString('bn-BD', {hour:'2-digit', minute:'2-digit'});
+    const dateStr = formatBnDateTime(date);
     rows += `<tr>
       <td>${esc(r.studentName)}</td>
       <td>${esc(ex ? ex.title : 'মুছে ফেলা পরীক্ষা')}</td>
@@ -735,9 +752,7 @@ function exportResultsPdf() {
   state.results.forEach(r => {
     const ex = getExam(r.examId);
     const pct = r.total > 0 ? Math.round((r.score / r.total) * 100) : 0;
-    const dateStr = new Date(r.submittedAt).toLocaleString('bn-BD', {
-      day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
+    const dateStr = formatBnDateTime(new Date(r.submittedAt));
     rows += `<tr>
       <td>${esc(r.studentName)}</td>
       <td>${esc(ex ? ex.title : 'মুছে ফেলা পরীক্ষা')}</td>
