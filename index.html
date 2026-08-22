@@ -255,6 +255,7 @@ let state = {
   activeExamId: null,
   lockedExamId: null,
   studentName: '',
+  studentPhone: '',
   historyStudentName: null,
   answers: {},
   lastResult: null,
@@ -346,6 +347,7 @@ async function loadAll() {
       id: r.id,
       examId: r.exam_id,
       studentName: r.student_name,
+      studentPhone: r.student_phone,
       score: r.score,
       total: r.total,
       answers: r.answers,
@@ -527,6 +529,7 @@ function renderTeacherResults() {
     const dateStr = formatBnDateTime(date);
     rows += `<tr>
       <td>${esc(r.studentName)}</td>
+      <td>${esc(r.studentPhone || '—')}</td>
       <td>${esc(ex ? ex.title : 'মুছে ফেলা পরীক্ষা')}</td>
       <td>${r.score} / ${r.total}</td>
       <td>${pct}%</td>
@@ -535,7 +538,7 @@ function renderTeacherResults() {
   });
   html += `<div class="card">
     <table>
-      <tr><th>নাম</th><th>পরীক্ষা</th><th>স্কোর</th><th>শতাংশ</th><th>সময়</th></tr>
+      <tr><th>নাম</th><th>মোবাইল</th><th>পরীক্ষা</th><th>স্কোর</th><th>শতাংশ</th><th>সময়</th></tr>
       ${rows}
     </table>
   </div>`;
@@ -774,6 +777,7 @@ function exportResultsPdf() {
     const dateStr = formatBnDateTime(new Date(r.submittedAt));
     rows += `<tr>
       <td>${esc(r.studentName)}</td>
+      <td>${esc(r.studentPhone || '—')}</td>
       <td>${esc(ex ? ex.title : 'মুছে ফেলা পরীক্ষা')}</td>
       <td>${r.score} / ${r.total}</td>
       <td>${pct}%</td>
@@ -803,7 +807,7 @@ function exportResultsPdf() {
   <h1>পরীক্ষার রেজাল্ট</h1>
   <div class="meta">মোট ${state.results.length}টি জমা — তৈরি হয়েছে ${new Date().toLocaleString('bn-BD', {day:'numeric', month:'long', year:'numeric'})}</div>
   <table>
-    <tr><th>নাম</th><th>পরীক্ষা</th><th>স্কোর</th><th>শতাংশ</th><th>সময়</th></tr>
+    <tr><th>নাম</th><th>মোবাইল</th><th>পরীক্ষা</th><th>স্কোর</th><th>শতাংশ</th><th>সময়</th></tr>
     ${rows}
   </table>
   <br>
@@ -855,6 +859,8 @@ function renderStudentName() {
     <div style="font-weight:500; margin-bottom:14px">${esc(ex.title)}</div>
     <label>আপনার নাম লিখুন</label>
     <input type="text" id="studentNameInput" placeholder="যেমন: রহিম উদ্দিন">
+    <label>মোবাইল নাম্বার লিখুন</label>
+    <input type="tel" id="studentPhoneInput" placeholder="যেমন: ০১৭xxxxxxxx" inputmode="numeric">
     <div id="nameErr" class="err" style="display:none"></div>
     <button data-action="start-exam">পরীক্ষা শুরু করুন</button>
   </div>`;
@@ -1100,10 +1106,24 @@ async function startExam() {
   const ex = getExam(state.activeExamId);
   if (!ex) return;
   const nameInput = document.getElementById('studentNameInput');
+  const phoneInput = document.getElementById('studentPhoneInput');
   const name = nameInput.value.trim();
+  const phone = phoneInput.value.trim();
   const errEl = document.getElementById('nameErr');
+
   if (!name) {
     errEl.textContent = 'অনুগ্রহ করে আপনার নাম লিখুন।';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (!phone) {
+    errEl.textContent = 'অনুগ্রহ করে আপনার মোবাইল নাম্বার লিখুন।';
+    errEl.style.display = 'block';
+    return;
+  }
+  const digitsOnly = phone.replace(/\D/g, '');
+  if (digitsOnly.length < 10) {
+    errEl.textContent = 'সঠিক মোবাইল নাম্বার লিখুন।';
     errEl.style.display = 'block';
     return;
   }
@@ -1112,7 +1132,7 @@ async function startExam() {
     .from('results')
     .select('id')
     .eq('exam_id', ex.id)
-    .ilike('student_name', name);
+    .eq('student_phone', digitsOnly);
 
   if (error) {
     errEl.textContent = 'যাচাই করতে সমস্যা হয়েছে, আবার চেষ্টা করুন।';
@@ -1120,12 +1140,13 @@ async function startExam() {
     return;
   }
   if (existing && existing.length > 0) {
-    errEl.textContent = 'এই নামে আপনি ইতিমধ্যে এই পরীক্ষাটি দিয়েছেন। একই পরীক্ষা দ্বিতীয়বার দেওয়া যাবে না।';
+    errEl.textContent = 'এই মোবাইল নাম্বার দিয়ে আপনি ইতিমধ্যে এই পরীক্ষাটি দিয়েছেন। একই পরীক্ষা দ্বিতীয়বার দেওয়া যাবে না।';
     errEl.style.display = 'block';
     return;
   }
 
   state.studentName = name;
+  state.studentPhone = digitsOnly;
   state.answers = {};
   state.studentView = 'exam';
   render();
@@ -1202,6 +1223,7 @@ async function submitExam(autoSubmitted) {
     .insert({
       exam_id: ex.id,
       student_name: state.studentName,
+      student_phone: state.studentPhone,
       score, total: ex.questions.length,
       answers: answersToSave
     })
@@ -1214,7 +1236,7 @@ async function submitExam(autoSubmitted) {
   }
 
   state.lastResult = {
-    id: data.id, examId: ex.id, studentName: state.studentName,
+    id: data.id, examId: ex.id, studentName: state.studentName, studentPhone: state.studentPhone,
     score, total: ex.questions.length, answers: answersToSave, submittedAt: data.submitted_at
   };
   state.results.unshift(state.lastResult);
