@@ -412,7 +412,7 @@ function renderTeacherResults() {
     const ex = getExam(r.examId);
     const pct = r.total > 0 ? Math.round((r.score / r.total) * 100) : 0;
     const date = new Date(r.submittedAt);
-    const dateStr = date.toLocaleDateString('bn-BD', {day:'numeric', month:'short'}) + ' ' + date.toLocaleTimeString('bn-BD', {hour:'2-digit', minute:'2-digit'});
+    const dateStr = date.toLocaleDateString('bn-BD', {day:'numeric', month:'long'}) + ' ' + date.toLocaleTimeString('bn-BD', {hour:'2-digit', minute:'2-digit'});
     rows += `<tr>
       <td>${esc(r.studentName)}</td>
       <td>${esc(ex ? ex.title : 'মুছে ফেলা পরীক্ষা')}</td>
