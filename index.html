@@ -264,6 +264,7 @@ let state = {
 
   teacherView: 'exams',
   teacherExamId: null,
+  editingTimerFor: null,
   editingOptions: [{text:'', correct:true}, {text:'', correct:false}]
 };
 
@@ -470,6 +471,23 @@ function renderExamDetail() {
     <button data-action="add-question-to" data-id="${ex.id}">+ প্রশ্ন যোগ করুন</button>
   </div>`;
 
+  html += `<div class="card" style="margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+    <div>⏱️ <b>টাইমার:</b> ${ex.durationMin ? toBnNumeral(ex.durationMin) + ' মিনিট' : 'সেট করা নেই'}</div>
+    <button class="secondary" data-action="edit-timer" data-id="${ex.id}">টাইমার পরিবর্তন করুন</button>
+  </div>`;
+
+  if (state.editingTimerFor === ex.id) {
+    html += `<div class="card" style="margin-bottom:16px;">
+      <label>নতুন সময়সীমা (মিনিট, খালি রাখলে টাইমার বাদ যাবে)</label>
+      <input type="number" id="editTimerInput" placeholder="যেমন: 15" min="1" value="${ex.durationMin || ''}">
+      <div id="timerErr" class="err" style="display:none"></div>
+      <div style="display:flex; gap:8px;">
+        <button data-action="save-timer" data-id="${ex.id}">সেভ করুন</button>
+        <button class="secondary" data-action="cancel-edit-timer">বাতিল</button>
+      </div>
+    </div>`;
+  }
+
   if (ex.startsAt || ex.endsAt) {
     const parts = [];
     if (ex.startsAt) parts.push('শুরু: ' + formatBnDateTime(new Date(ex.startsAt)));
@@ -594,6 +612,23 @@ function bindTeacherEvents() {
     btn.addEventListener('click', () => clearExamWindow(btn.dataset.id));
   });
 
+  container.querySelectorAll('[data-action="edit-timer"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.editingTimerFor = btn.dataset.id;
+      render();
+    });
+  });
+
+  const cancelTimerBtn = container.querySelector('[data-action="cancel-edit-timer"]');
+  if (cancelTimerBtn) cancelTimerBtn.addEventListener('click', () => {
+    state.editingTimerFor = null;
+    render();
+  });
+
+  container.querySelectorAll('[data-action="save-timer"]').forEach(btn => {
+    btn.addEventListener('click', () => saveTimer(btn.dataset.id));
+  });
+
   container.querySelectorAll('[data-action="copy-link"]').forEach(btn => {
     btn.addEventListener('click', () => copyExamLink(btn.dataset.id));
   });
@@ -715,6 +750,37 @@ async function clearExamWindow(id) {
     .update({ starts_at: null, ends_at: null })
     .eq('id', id);
   if (error) { alert('আপডেট করতে সমস্যা হয়েছে: ' + error.message); return; }
+  await loadAll();
+  render();
+}
+
+async function saveTimer(id) {
+  const input = document.getElementById('editTimerInput');
+  const errEl = document.getElementById('timerErr');
+  const raw = input.value.trim();
+
+  let durationMin = null;
+  if (raw) {
+    durationMin = parseInt(raw, 10);
+    if (isNaN(durationMin) || durationMin <= 0) {
+      errEl.textContent = 'সঠিক একটি সংখ্যা লিখুন।';
+      errEl.style.display = 'block';
+      return;
+    }
+  }
+
+  const { error } = await sb
+    .from('exams')
+    .update({ duration_min: durationMin })
+    .eq('id', id);
+
+  if (error) {
+    errEl.textContent = 'সেভ করতে সমস্যা হয়েছে: ' + error.message;
+    errEl.style.display = 'block';
+    return;
+  }
+
+  state.editingTimerFor = null;
   await loadAll();
   render();
 }
