@@ -1002,6 +1002,7 @@ function renderStudentName() {
     <input type="tel" id="studentPhoneInput" placeholder="যেমন: ০১৭xxxxxxxx" inputmode="numeric" ${disabled}>
     <div id="nameErr" class="err" style="display:none"></div>
     <button data-action="start-exam" ${disabled}>পরীক্ষা শুরু করুন</button>
+    <div class="hint" style="margin-top:10px; margin-bottom:0; text-align:center;">আগে এই পরীক্ষা দিয়ে থাকলে, একই নাম ও মোবাইল নাম্বার দিলে আপনার আগের ফলাফল দেখাবে।</div>
   </div>`;
 }
 
@@ -1277,18 +1278,30 @@ async function startExam() {
 
   const { data: existing, error } = await sb
     .from('results')
-    .select('id')
+    .select('*')
     .eq('exam_id', ex.id)
-    .eq('student_phone', digitsOnly);
+    .eq('student_phone', digitsOnly)
+    .order('submitted_at', { ascending: false })
+    .limit(1);
 
   if (error) {
     errEl.textContent = 'যাচাই করতে সমস্যা হয়েছে, আবার চেষ্টা করুন।';
     errEl.style.display = 'block';
     return;
   }
+
   if (existing && existing.length > 0) {
-    errEl.textContent = 'এই মোবাইল নাম্বার দিয়ে আপনি ইতিমধ্যে এই পরীক্ষাটি দিয়েছেন। একই পরীক্ষা দ্বিতীয়বার দেওয়া যাবে না।';
-    errEl.style.display = 'block';
+    // আগেই এই পরীক্ষা দেওয়া হয়েছে — নতুন করে না দিয়ে আগের ফলাফল সরাসরি দেখানো হচ্ছে
+    const prev = existing[0];
+    state.studentName = prev.student_name;
+    state.studentPhone = prev.student_phone;
+    state.lastResult = {
+      id: prev.id, examId: prev.exam_id, studentName: prev.student_name,
+      studentPhone: prev.student_phone, score: prev.score, total: prev.total,
+      answers: prev.answers, submittedAt: prev.submitted_at
+    };
+    state.studentView = 'result';
+    render();
     return;
   }
 
