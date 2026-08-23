@@ -266,6 +266,7 @@ let state = {
   teacherView: 'exams',
   teacherExamId: null,
   editingTimerFor: null,
+  editingQuestionId: null,
   editingOptions: [{text:'', correct:true}, {text:'', correct:false}]
 };
 
@@ -516,6 +517,7 @@ function renderExamDetail() {
         html += `<div class="hint" style="margin-top:8px">ব্যাখ্যা: ${escMultiline(q.explanation)}</div>`;
       }
       html += `<div class="q-item-actions">
+        <button class="secondary" data-action="edit-question" data-id="${q.id}">এডিট করুন</button>
         <button class="danger" data-action="delete-question" data-id="${q.id}">মুছে ফেলুন</button>
       </div></div>`;
     });
@@ -526,6 +528,9 @@ function renderExamDetail() {
 function renderAddQuestion() {
   const ex = getExam(state.teacherExamId);
   if (!ex) return '<div class="card"><div class="empty">পরীক্ষাটি পাওয়া যায়নি।</div></div>';
+
+  const isEditing = !!state.editingQuestionId;
+  const editingQ = isEditing ? ex.questions.find(q => q.id === state.editingQuestionId) : null;
 
   const opts = state.editingOptions;
   let optsHtml = '';
@@ -540,7 +545,7 @@ function renderAddQuestion() {
   return `<button class="back-link" data-action="back-to-detail">← ${esc(ex.title)}-এ ফিরুন</button>
   <div class="card">
     <label>প্রশ্ন</label>
-    <textarea id="newQText" placeholder="যেমন: বাংলাদেশের রাজধানী কোনটি?"></textarea>
+    <textarea id="newQText" placeholder="যেমন: বাংলাদেশের রাজধানী কোনটি?">${editingQ ? esc(editingQ.text) : ''}</textarea>
     <div id="qErr" class="err" style="display:none"></div>
 
     <label>অপশনসমূহ (সঠিক উত্তরের পাশে রেডিও বাটনে ক্লিক করুন)</label>
@@ -548,9 +553,10 @@ function renderAddQuestion() {
     <button class="secondary" style="margin-bottom:16px" data-action="add-option">+ আরেকটি অপশন</button>
 
     <label>ব্যাখ্যা (ঐচ্ছিক — ভুল উত্তর দিলে স্টুডেন্ট এটা দেখবে)</label>
-    <textarea id="newQExp" placeholder="কেন এই উত্তরটি সঠিক তার ব্যাখ্যা লিখুন"></textarea>
+    <textarea id="newQExp" placeholder="কেন এই উত্তরটি সঠিক তার ব্যাখ্যা লিখুন">${editingQ ? esc(editingQ.explanation || '') : ''}</textarea>
 
-    <button data-action="submit-question">প্রশ্ন যোগ করুন</button>
+    <button data-action="submit-question">${isEditing ? 'পরিবর্তন সেভ করুন' : 'প্রশ্ন যোগ করুন'}</button>
+    ${isEditing ? '<button class="secondary" data-action="cancel-edit-question" style="margin-left:8px;">বাতিল</button>' : ''}
   </div>`;
 }
 
@@ -650,8 +656,21 @@ function bindTeacherEvents() {
   const addQTo = container.querySelector('[data-action="add-question-to"]');
   if (addQTo) addQTo.addEventListener('click', () => {
     state.editingOptions = [{text:'', correct:true}, {text:'', correct:false}];
+    state.editingQuestionId = null;
     state.teacherView = 'addQuestion';
     render();
+  });
+
+  container.querySelectorAll('[data-action="edit-question"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const ex = getExam(state.teacherExamId);
+      const q = ex ? ex.questions.find(qq => qq.id === btn.dataset.id) : null;
+      if (!q) return;
+      state.editingOptions = q.options.map((text, i) => ({ text, correct: i === q.correctIndex }));
+      state.editingQuestionId = q.id;
+      state.teacherView = 'addQuestion';
+      render();
+    });
   });
 
   container.querySelectorAll('[data-action="delete-question"]').forEach(btn => {
@@ -672,6 +691,13 @@ function bindTeacherEvents() {
 
   const submitQBtn = container.querySelector('[data-action="submit-question"]');
   if (submitQBtn) submitQBtn.addEventListener('click', submitQuestion);
+
+  const cancelEditQBtn = container.querySelector('[data-action="cancel-edit-question"]');
+  if (cancelEditQBtn) cancelEditQBtn.addEventListener('click', () => {
+    state.editingQuestionId = null;
+    state.teacherView = 'examDetail';
+    render();
+  });
 
   const exportBtn = container.querySelector('[data-action="export-pdf"]');
   if (exportBtn) exportBtn.addEventListener('click', exportResultsPdf);
@@ -846,31 +872,58 @@ async function submitQuestion() {
   errEl.style.display = 'none';
 
   const correctIndex = state.editingOptions.findIndex(o => o.correct);
+  const isEditing = !!state.editingQuestionId;
 
-  const { data: qData, error: qError } = await sb
-    .from('questions')
-    .insert({ exam_id: ex.id, text, explanation: exp || null, correct_index: correctIndex })
-    .select()
-    .single();
+  let questionId;
 
-  if (qError) {
-    errEl.textContent = 'প্রশ্ন যোগ করতে সমস্যা হয়েছে: ' + qError.message;
-    errEl.style.display = 'block';
-    return;
+  if (isEditing) {
+    const { error: updateError } = await sb
+      .from('questions')
+      .update({ text, explanation: exp || null, correct_index: correctIndex })
+      .eq('id', state.editingQuestionId);
+
+    if (updateError) {
+      errEl.textContent = 'প্রশ্ন আপডেট করতে সমস্যা হয়েছে: ' + updateError.message;
+      errEl.style.display = 'block';
+      return;
+    }
+    questionId = state.editingQuestionId;
+
+    // পুরনো অপশনগুলো মুছে নতুন করে বসানো হচ্ছে, যাতে অপশনের সংখ্যা বদলালেও ঠিকভাবে কাজ করে
+    const { error: delOptError } = await sb.from('options').delete().eq('question_id', questionId);
+    if (delOptError) {
+      errEl.textContent = 'পুরনো অপশন মুছতে সমস্যা হয়েছে: ' + delOptError.message;
+      errEl.style.display = 'block';
+      return;
+    }
+  } else {
+    const { data: qData, error: qError } = await sb
+      .from('questions')
+      .insert({ exam_id: ex.id, text, explanation: exp || null, correct_index: correctIndex })
+      .select()
+      .single();
+
+    if (qError) {
+      errEl.textContent = 'প্রশ্ন যোগ করতে সমস্যা হয়েছে: ' + qError.message;
+      errEl.style.display = 'block';
+      return;
+    }
+    questionId = qData.id;
   }
 
   const optionRows = opts.map((text, i) => ({
-    question_id: qData.id,
+    question_id: questionId,
     option_text: text,
     option_order: i
   }));
   const { error: oError } = await sb.from('options').insert(optionRows);
   if (oError) {
-    errEl.textContent = 'অপশন যোগ করতে সমস্যা হয়েছে: ' + oError.message;
+    errEl.textContent = 'অপশন সেভ করতে সমস্যা হয়েছে: ' + oError.message;
     errEl.style.display = 'block';
     return;
   }
 
+  state.editingQuestionId = null;
   await loadAll();
   state.teacherView = 'examDetail';
   render();
