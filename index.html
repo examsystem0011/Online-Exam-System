@@ -993,14 +993,14 @@ function downloadQuestionPaper() {
 <meta charset="UTF-8">
 <title>${esc(ex.title)} — প্রশ্নপত্র</title>
 <style>
-  body { font-family: 'Hind Siliguri', 'Noto Sans Bengali', system-ui, sans-serif; padding: 36px; color: #222; max-width: 800px; margin: 0 auto; position: relative; }
+  body { font-family: 'Hind Siliguri', 'Noto Sans Bengali', system-ui, sans-serif; padding: 36px; color: #222; max-width: 800px; margin: 0 auto; position: relative; z-index: 1; }
   .watermark {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     display: flex; align-items: center; justify-content: center;
-    pointer-events: none; z-index: -1; overflow: hidden;
+    pointer-events: none; z-index: 0; overflow: hidden;
   }
   .watermark span {
-    font-size: 90px; font-weight: 800; color: #6C4FF6; opacity: 0.06;
+    font-size: 100px; font-weight: 800; color: #6C4FF6; opacity: 0.16;
     transform: rotate(-32deg); white-space: nowrap; font-family: 'Hind Siliguri', sans-serif;
   }
   .brand-header {
