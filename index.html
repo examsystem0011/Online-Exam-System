@@ -993,7 +993,21 @@ function downloadQuestionPaper() {
 <meta charset="UTF-8">
 <title>${esc(ex.title)} — প্রশ্নপত্র</title>
 <style>
-  body { font-family: 'Hind Siliguri', 'Noto Sans Bengali', system-ui, sans-serif; padding: 36px; color: #222; max-width: 800px; margin: 0 auto; }
+  body { font-family: 'Hind Siliguri', 'Noto Sans Bengali', system-ui, sans-serif; padding: 36px; color: #222; max-width: 800px; margin: 0 auto; position: relative; }
+  .watermark {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: none; z-index: -1; overflow: hidden;
+  }
+  .watermark span {
+    font-size: 90px; font-weight: 800; color: #6C4FF6; opacity: 0.06;
+    transform: rotate(-32deg); white-space: nowrap; font-family: 'Hind Siliguri', sans-serif;
+  }
+  .brand-header {
+    display: flex; align-items: center;
+    font-size: 12px; color: #888; margin-bottom: 14px; letter-spacing: 0.5px;
+  }
+  .brand-header .brand-name { font-weight: 800; color: #6C4FF6; font-size: 16px; }
   .paper-header { text-align: center; border-bottom: 3px double #1B2A4A; padding-bottom: 16px; margin-bottom: 20px; }
   .paper-header .exam-title { font-size: 24px; font-weight: 800; color: #1B2A4A; margin-bottom: 6px; }
   .meta-row { font-size: 14px; color: #444; display: flex; justify-content: center; gap: 24px; margin-top: 8px; }
@@ -1007,11 +1021,16 @@ function downloadQuestionPaper() {
   .options { margin-left: 20px; margin-bottom: 8px; }
   .opt-line { font-size: 14px; margin-bottom: 4px; }
   .explanation { margin-left: 20px; margin-top: 6px; padding: 10px 14px; background: #FBF9F2; border-left: 3px solid #6C4FF6; font-size: 13.5px; line-height: 1.6; }
+  .paper-footer { margin-top: 34px; padding-top: 14px; border-top: 1px solid #ddd; text-align: center; font-size: 12px; color: #999; }
   .print-btn { margin-top: 30px; padding: 12px 22px; font-size: 15px; cursor: pointer; background:#6C4FF6; color:#fff; border:none; border-radius:10px; }
   @media print { .print-btn { display: none; } }
 </style>
 </head>
 <body>
+  <div class="watermark"><span>Function</span></div>
+  <div class="brand-header">
+    <span class="brand-name">Function</span>
+  </div>
   <div class="paper-header">
     <div class="exam-title">${esc(ex.title)}</div>
     ${subjectLine}
@@ -1021,6 +1040,7 @@ function downloadQuestionPaper() {
     <span><b>স্কোর:</b> ${r.score}/${r.total} (${pct}%)</span>
   </div>
   ${questionsHtml}
+  <div class="paper-footer">Function</div>
   <button class="print-btn" onclick="window.print()">PDF হিসেবে সেভ করুন (Print)</button>
 </body>
 </html>`);
