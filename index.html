@@ -156,7 +156,7 @@
   }
   .result-item.correct .tag { color: var(--good); }
   .result-item.wrong .tag { color: var(--bad); }
-  .result-item .exp { font-size: 14px; color: var(--ink); margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); font-weight: 500; font-feature-settings: "liga" 0, "clig" 0; }
+  .result-item .exp { font-size: 14px; color: var(--ink); margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); font-weight: 500; font-feature-settings: "liga" 0, "clig" 0; text-align: left; word-spacing: normal; }
 
   .score-box {
     text-align: center; padding: 32px 20px;
@@ -180,7 +180,7 @@
 
   .empty { text-align: center; color: var(--muted); padding: 34px 10px; font-size: 14px; font-weight: 500; }
   .err { color: var(--bad); font-size: 13px; margin: -8px 0 12px; font-weight: 700; }
-  .hint { font-size: 13px; color: var(--muted); margin-top: -8px; margin-bottom: 14px; font-feature-settings: "liga" 0, "clig" 0; }
+  .hint { font-size: 13px; color: var(--muted); margin-top: -8px; margin-bottom: 14px; font-feature-settings: "liga" 0, "clig" 0; text-align: left; word-spacing: normal; }
 
   .timer {
     position: sticky; top: 8px; z-index: 5; text-align: center; font-weight: 800;
@@ -225,7 +225,7 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>📚 ফাংশন ক্যরিয়ার সেন্টার</h1>
+  <h1>📚 পরীক্ষার খাতা</h1>
   <p class="sub" id="subtitle">লোড হচ্ছে...</p>
 
   <div class="tabs">
@@ -343,6 +343,8 @@ async function loadAll() {
     state.exams = exams.map(ex => ({
       id: ex.id,
       title: ex.title,
+      subject: ex.subject,
+      topic: ex.topic,
       durationMin: ex.duration_min,
       startsAt: ex.starts_at,
       endsAt: ex.ends_at,
@@ -456,6 +458,10 @@ function renderAddExam() {
   return `<div class="card">
     <label>পরীক্ষার নাম</label>
     <input type="text" id="newExamTitle" placeholder="যেমন: সাধারণ জ্ঞান - সেট ১">
+    <label>সাবজেক্ট (ঐচ্ছিক)</label>
+    <input type="text" id="newExamSubject" placeholder="যেমন: গণিত">
+    <label>টপিক (ঐচ্ছিক)</label>
+    <input type="text" id="newExamTopic" placeholder="যেমন: শতকরা">
     <label>সময়সীমা (মিনিট, খালি রাখলে সময়সীমা থাকবে না)</label>
     <input type="number" id="newExamDuration" placeholder="যেমন: 15" min="1">
     <label>পরীক্ষা শুরু হবে (ঐচ্ছিক — খালি রাখলে যেকোনো সময় দেওয়া যাবে)</label>
@@ -723,6 +729,8 @@ function setTeacherView(v) {
 
 async function createExam() {
   const title = document.getElementById('newExamTitle').value.trim();
+  const subject = document.getElementById('newExamSubject').value.trim();
+  const topic = document.getElementById('newExamTopic').value.trim();
   const durationRaw = document.getElementById('newExamDuration').value.trim();
   const startRaw = document.getElementById('newExamStart').value;
   const endRaw = document.getElementById('newExamEnd').value;
@@ -750,7 +758,7 @@ async function createExam() {
 
   const { data, error } = await sb
     .from('exams')
-    .insert({ title, duration_min: durationMin, starts_at: startsAt, ends_at: endsAt })
+    .insert({ title, subject: subject || null, topic: topic || null, duration_min: durationMin, starts_at: startsAt, ends_at: endsAt })
     .select()
     .single();
 
@@ -936,6 +944,90 @@ async function deleteQuestion(id) {
   render();
 }
 
+function downloadQuestionPaper() {
+  const ex = getExam(state.activeExamId);
+  const r = state.lastResult;
+  if (!ex || !r) return;
+
+  let questionsHtml = '';
+  ex.questions.forEach((q, qi) => {
+    const given = r.answers[q.id];
+    const isCorrect = given === q.correctIndex;
+
+    let optionsHtml = '';
+    q.options.forEach((opt, oi) => {
+      const isCorrectOpt = oi === q.correctIndex;
+      const isGivenOpt = oi === given;
+      let marker = '';
+      let style = '';
+      if (isCorrectOpt) {
+        marker = ' ✓';
+        style = 'color:#2D6A4F; font-weight:700;';
+      }
+      if (isGivenOpt && !isCorrectOpt) {
+        marker += ' (আপনার উত্তর ✗)';
+        style = 'color:#B8471F; font-weight:700;';
+      } else if (isGivenOpt && isCorrectOpt) {
+        marker += ' (আপনার উত্তর)';
+      }
+      const letters = ['ক', 'খ', 'গ', 'ঘ', 'ঙ', 'চ'];
+      optionsHtml += `<div class="opt-line" style="${style}">(${letters[oi] || (oi+1)}) ${esc(opt)}${marker}</div>`;
+    });
+
+    questionsHtml += `<div class="q-block">
+      <div class="q-title"><span class="q-num">${qi+1}.</span> ${esc(q.text)} <span class="q-status ${isCorrect ? 'ok' : 'no'}">${isCorrect ? '[সঠিক]' : '[ভুল]'}</span></div>
+      <div class="options">${optionsHtml}</div>
+      ${q.explanation ? `<div class="explanation"><b>ব্যাখ্যা:</b> ${escMultiline(q.explanation)}</div>` : ''}
+    </div>`;
+  });
+
+  const pct = Math.round((r.score / r.total) * 100);
+  const subjectLine = (ex.subject || ex.topic)
+    ? `<div class="meta-row">${ex.subject ? `<span><b>সাবজেক্ট:</b> ${esc(ex.subject)}</span>` : ''}${ex.topic ? `<span><b>টপিক:</b> ${esc(ex.topic)}</span>` : ''}</div>`
+    : '';
+
+  const printWindow = window.open('', '_blank');
+  printWindow.document.write(`<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<title>${esc(ex.title)} — প্রশ্নপত্র</title>
+<style>
+  body { font-family: 'Hind Siliguri', 'Noto Sans Bengali', system-ui, sans-serif; padding: 36px; color: #222; max-width: 800px; margin: 0 auto; }
+  .paper-header { text-align: center; border-bottom: 3px double #1B2A4A; padding-bottom: 16px; margin-bottom: 20px; }
+  .paper-header .exam-title { font-size: 24px; font-weight: 800; color: #1B2A4A; margin-bottom: 6px; }
+  .meta-row { font-size: 14px; color: #444; display: flex; justify-content: center; gap: 24px; margin-top: 8px; }
+  .student-row { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 12px; }
+  .q-block { margin-bottom: 22px; page-break-inside: avoid; }
+  .q-title { font-weight: 700; font-size: 15px; margin-bottom: 8px; }
+  .q-num { color: #6C4FF6; }
+  .q-status { font-size: 12px; font-weight: 700; margin-left: 6px; }
+  .q-status.ok { color: #2D6A4F; }
+  .q-status.no { color: #B8471F; }
+  .options { margin-left: 20px; margin-bottom: 8px; }
+  .opt-line { font-size: 14px; margin-bottom: 4px; }
+  .explanation { margin-left: 20px; margin-top: 6px; padding: 10px 14px; background: #FBF9F2; border-left: 3px solid #6C4FF6; font-size: 13.5px; line-height: 1.6; }
+  .print-btn { margin-top: 30px; padding: 12px 22px; font-size: 15px; cursor: pointer; background:#6C4FF6; color:#fff; border:none; border-radius:10px; }
+  @media print { .print-btn { display: none; } }
+</style>
+</head>
+<body>
+  <div class="paper-header">
+    <div class="exam-title">${esc(ex.title)}</div>
+    ${subjectLine}
+  </div>
+  <div class="student-row">
+    <span><b>নাম:</b> ${esc(r.studentName)}</span>
+    <span><b>স্কোর:</b> ${r.score}/${r.total} (${pct}%)</span>
+  </div>
+  ${questionsHtml}
+  <button class="print-btn" onclick="window.print()">PDF হিসেবে সেভ করুন (Print)</button>
+</body>
+</html>`);
+  printWindow.document.close();
+  printWindow.onload = () => { printWindow.focus(); };
+}
+
 function exportResultsPdf() {
   let rows = '';
   state.results.forEach(r => {
@@ -1102,6 +1194,8 @@ function renderStudentResult() {
     <div class="num">${r.score} / ${r.total}</div>
     <div class="lbl">${esc(r.studentName)} — ${esc(ex.title)} — ${pct}% সঠিক</div>
   </div>`;
+
+  html += `<button class="secondary" data-action="download-question-paper" style="width:100%; margin-bottom:16px;">📄 প্রশ্নপত্র ডাউনলোড করুন (ব্যাখ্যাসহ)</button>`;
 
   ex.questions.forEach((q, qi) => {
     const given = r.answers[q.id];
@@ -1283,6 +1377,9 @@ function bindStudentEvents() {
 
   const submitBtn = container.querySelector('[data-action="submit-exam"]');
   if (submitBtn) submitBtn.addEventListener('click', () => submitExam(false));
+
+  const downloadBtn = container.querySelector('[data-action="download-question-paper"]');
+  if (downloadBtn) downloadBtn.addEventListener('click', downloadQuestionPaper);
 
   const historyBtn = container.querySelector('[data-action="view-my-history"]');
   if (historyBtn) historyBtn.addEventListener('click', () => {
