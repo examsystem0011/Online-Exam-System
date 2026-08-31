@@ -1062,7 +1062,7 @@ function downloadQuestionPaper() {
 <meta charset="UTF-8">
 <title>${esc(ex.title)} — প্রশ্নপত্র</title>
 <style>
-  @page { margin: 150px 36px 110px 36px; }
+  @page { margin: 105px 34px 85px 34px; }
 
   * { box-sizing: border-box; }
   body {
@@ -1072,22 +1072,26 @@ function downloadQuestionPaper() {
 
   /* প্রতি প্রিন্ট পেজে পুনরাবৃত্ত হেডার/ফুটার */
   .page-header {
-    position: fixed; top: 0; left: 0; right: 0; height: 130px;
+    position: fixed; top: 0; left: 0; right: 0; height: 90px;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    border-bottom: 2px solid #1B2A4A; padding: 10px 20px 12px;
-    background: #fff;
+    background: linear-gradient(135deg, #F3F1FB, #EDE8FF);
+    border-bottom: 3px solid #6C4FF6;
+    padding: 8px 20px;
   }
-  .page-header .brand-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
-  .page-header .brand-row img { height: 40px; width: auto; }
+  .page-header .brand-row { display: flex; align-items: center; gap: 10px; margin-bottom: 3px; }
+  .page-header .brand-row img { height: 38px; width: auto; }
   .page-header .brand-row .brand-text { font-size: 17px; font-weight: 800; color: #1B2A4A; }
-  .page-header .exam-title { font-size: 15px; font-weight: 700; color: #6C4FF6; }
-  .page-header .subject-topic { font-size: 12.5px; color: #555; margin-top: 2px; }
+  .page-header .subject-topic {
+    font-size: 12px; color: #6C4FF6; font-weight: 700; margin-top: 1px;
+    background: #fff; padding: 2px 12px; border-radius: 20px; border: 1px solid #D9D1FA;
+  }
 
   .page-footer {
-    position: fixed; bottom: 0; left: 0; right: 0; height: 90px;
-    border-top: 1px solid #ccc; padding: 10px 20px;
+    position: fixed; bottom: 0; left: 0; right: 0; height: 68px;
+    background: linear-gradient(135deg, #1B2A4A, #2B3E66);
+    padding: 8px 20px;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-    background: #fff; font-size: 11.5px; color: #555;
+    font-size: 11.5px; color: #E3E7F5;
   }
   .page-footer .fb-row { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; justify-content: center; }
   .page-footer .fb-item { display: flex; align-items: center; gap: 6px; }
@@ -1096,10 +1100,9 @@ function downloadQuestionPaper() {
     display: inline-flex; align-items: center; justify-content: center;
     font-family: Georgia, serif; font-weight: 700; font-size: 12px; flex-shrink: 0;
   }
-  .page-footer .phone-row { font-weight: 700; color: #1B2A4A; }
+  .page-footer .phone-row { font-weight: 700; color: #FFB800; }
 
-  /* মূল কনটেন্ট প্রতি পেজে হেডার/ফুটারের জায়গা ছেড়ে বসবে (মার্জিন @page দিয়ে হ্যান্ডেল হয়) */
-  .content-wrap { padding-top: 4px; }
+  .content-wrap { padding-top: 0; }
 
   .student-row { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 12px; }
   .q-block { margin-bottom: 22px; page-break-inside: avoid; }
