@@ -266,6 +266,7 @@ let state = {
   teacherView: 'exams',
   teacherExamId: null,
   editingTimerFor: null,
+  editingWindowFor: null,
   editingQuestionId: null,
   editingOptions: [{text:'', correct:true}, {text:'', correct:false}]
 };
@@ -500,13 +501,32 @@ function renderExamDetail() {
     </div>`;
   }
 
-  if (ex.startsAt || ex.endsAt) {
-    const parts = [];
-    if (ex.startsAt) parts.push('শুরু: ' + formatBnDateTime(new Date(ex.startsAt)));
-    if (ex.endsAt) parts.push('শেষ: ' + formatBnDateTime(new Date(ex.endsAt)));
-    html += `<div class="card" style="margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
-      <div>⏰ <b>সময়সীমা:</b> ${parts.join(' · ')}</div>
-      <button class="secondary" data-action="clear-exam-window" data-id="${ex.id}">সময়সীমা তুলে দিন (সবার জন্য উন্মুক্ত করুন)</button>
+  const parts = [];
+  if (ex.startsAt) parts.push('শুরু: ' + formatBnDateTime(new Date(ex.startsAt)));
+  if (ex.endsAt) parts.push('শেষ: ' + formatBnDateTime(new Date(ex.endsAt)));
+  const windowLabel = parts.length > 0 ? parts.join(' · ') : 'সেট করা নেই (যেকোনো সময় দেওয়া যাবে)';
+
+  html += `<div class="card" style="margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+    <div>⏰ <b>সময়সীমা:</b> ${windowLabel}</div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="secondary" data-action="edit-window" data-id="${ex.id}">${parts.length > 0 ? 'সময়সীমা পরিবর্তন করুন' : 'সময়সীমা যোগ করুন'}</button>
+      ${parts.length > 0 ? `<button class="secondary" data-action="clear-exam-window" data-id="${ex.id}">তুলে দিন</button>` : ''}
+    </div>
+  </div>`;
+
+  if (state.editingWindowFor === ex.id) {
+    const startVal = ex.startsAt ? new Date(ex.startsAt).toISOString().slice(0, 16) : '';
+    const endVal = ex.endsAt ? new Date(ex.endsAt).toISOString().slice(0, 16) : '';
+    html += `<div class="card" style="margin-bottom:16px;">
+      <label>পরীক্ষা শুরু হবে (ঐচ্ছিক — খালি রাখলে যেকোনো সময় থেকে দেওয়া যাবে)</label>
+      <input type="datetime-local" id="editWindowStart" value="${startVal}">
+      <label>পরীক্ষা শেষ হবে (ঐচ্ছিক)</label>
+      <input type="datetime-local" id="editWindowEnd" value="${endVal}">
+      <div id="windowErr" class="err" style="display:none"></div>
+      <div style="display:flex; gap:8px;">
+        <button data-action="save-window" data-id="${ex.id}">সেভ করুন</button>
+        <button class="secondary" data-action="cancel-edit-window">বাতিল</button>
+      </div>
     </div>`;
   }
 
@@ -627,6 +647,23 @@ function bindTeacherEvents() {
 
   container.querySelectorAll('[data-action="clear-exam-window"]').forEach(btn => {
     btn.addEventListener('click', () => clearExamWindow(btn.dataset.id));
+  });
+
+  container.querySelectorAll('[data-action="edit-window"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.editingWindowFor = btn.dataset.id;
+      render();
+    });
+  });
+
+  const cancelWindowBtn = container.querySelector('[data-action="cancel-edit-window"]');
+  if (cancelWindowBtn) cancelWindowBtn.addEventListener('click', () => {
+    state.editingWindowFor = null;
+    render();
+  });
+
+  container.querySelectorAll('[data-action="save-window"]').forEach(btn => {
+    btn.addEventListener('click', () => saveExamWindow(btn.dataset.id));
   });
 
   container.querySelectorAll('[data-action="edit-timer"]').forEach(btn => {
@@ -789,6 +826,36 @@ async function clearExamWindow(id) {
     .update({ starts_at: null, ends_at: null })
     .eq('id', id);
   if (error) { alert('আপডেট করতে সমস্যা হয়েছে: ' + error.message); return; }
+  await loadAll();
+  render();
+}
+
+async function saveExamWindow(id) {
+  const startRaw = document.getElementById('editWindowStart').value;
+  const endRaw = document.getElementById('editWindowEnd').value;
+  const errEl = document.getElementById('windowErr');
+
+  const startsAt = startRaw ? new Date(startRaw).toISOString() : null;
+  const endsAt = endRaw ? new Date(endRaw).toISOString() : null;
+
+  if (startsAt && endsAt && new Date(endsAt) <= new Date(startsAt)) {
+    errEl.textContent = 'শেষ সময় অবশ্যই শুরুর সময়ের পরে হতে হবে।';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const { error } = await sb
+    .from('exams')
+    .update({ starts_at: startsAt, ends_at: endsAt })
+    .eq('id', id);
+
+  if (error) {
+    errEl.textContent = 'সেভ করতে সমস্যা হয়েছে: ' + error.message;
+    errEl.style.display = 'block';
+    return;
+  }
+
+  state.editingWindowFor = null;
   await loadAll();
   render();
 }
@@ -1000,7 +1067,7 @@ function downloadQuestionPaper() {
     pointer-events: none; z-index: 0; overflow: hidden;
   }
   .watermark span {
-    font-size: 100px; font-weight: 800; color: #6C4FF6; opacity: 0.10;
+    font-size: 100px; font-weight: 800; color: #6C4FF6; opacity: 0.16;
     transform: rotate(-32deg); white-space: nowrap; font-family: 'Hind Siliguri', sans-serif;
   }
   .brand-header {
