@@ -268,6 +268,7 @@ let state = {
   teacherExamId: null,
   editingTimerFor: null,
   editingWindowFor: null,
+  editingSubjectTopicFor: null,
   editingQuestionId: null,
   editingOptions: [{text:'', correct:true}, {text:'', correct:false}]
 };
@@ -502,6 +503,28 @@ function renderExamDetail() {
     </div>`;
   }
 
+  const subjectTopicLabel = (ex.subject || ex.topic)
+    ? [ex.subject, ex.topic].filter(Boolean).join(' — ')
+    : 'সেট করা নেই';
+  html += `<div class="card" style="margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+    <div>📚 <b>সাবজেক্ট/টপিক:</b> ${esc(subjectTopicLabel)}</div>
+    <button class="secondary" data-action="edit-subject-topic" data-id="${ex.id}">পরিবর্তন করুন</button>
+  </div>`;
+
+  if (state.editingSubjectTopicFor === ex.id) {
+    html += `<div class="card" style="margin-bottom:16px;">
+      <label>সাবজেক্ট (ঐচ্ছিক)</label>
+      <input type="text" id="editSubjectInput" placeholder="যেমন: গণিত" value="${esc(ex.subject || '')}">
+      <label>টপিক (ঐচ্ছিক)</label>
+      <input type="text" id="editTopicInput" placeholder="যেমন: শতকরা" value="${esc(ex.topic || '')}">
+      <div id="subjectTopicErr" class="err" style="display:none"></div>
+      <div style="display:flex; gap:8px;">
+        <button data-action="save-subject-topic" data-id="${ex.id}">সেভ করুন</button>
+        <button class="secondary" data-action="cancel-edit-subject-topic">বাতিল</button>
+      </div>
+    </div>`;
+  }
+
   const parts = [];
   if (ex.startsAt) parts.push('শুরু: ' + formatBnDateTime(new Date(ex.startsAt)));
   if (ex.endsAt) parts.push('শেষ: ' + formatBnDateTime(new Date(ex.endsAt)));
@@ -665,6 +688,23 @@ function bindTeacherEvents() {
 
   container.querySelectorAll('[data-action="save-window"]').forEach(btn => {
     btn.addEventListener('click', () => saveExamWindow(btn.dataset.id));
+  });
+
+  container.querySelectorAll('[data-action="edit-subject-topic"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.editingSubjectTopicFor = btn.dataset.id;
+      render();
+    });
+  });
+
+  const cancelSubjectTopicBtn = container.querySelector('[data-action="cancel-edit-subject-topic"]');
+  if (cancelSubjectTopicBtn) cancelSubjectTopicBtn.addEventListener('click', () => {
+    state.editingSubjectTopicFor = null;
+    render();
+  });
+
+  container.querySelectorAll('[data-action="save-subject-topic"]').forEach(btn => {
+    btn.addEventListener('click', () => saveSubjectTopic(btn.dataset.id));
   });
 
   container.querySelectorAll('[data-action="edit-timer"]').forEach(btn => {
@@ -857,6 +897,27 @@ async function saveExamWindow(id) {
   }
 
   state.editingWindowFor = null;
+  await loadAll();
+  render();
+}
+
+async function saveSubjectTopic(id) {
+  const subject = document.getElementById('editSubjectInput').value.trim();
+  const topic = document.getElementById('editTopicInput').value.trim();
+  const errEl = document.getElementById('subjectTopicErr');
+
+  const { error } = await sb
+    .from('exams')
+    .update({ subject: subject || null, topic: topic || null })
+    .eq('id', id);
+
+  if (error) {
+    errEl.textContent = 'সেভ করতে সমস্যা হয়েছে: ' + error.message;
+    errEl.style.display = 'block';
+    return;
+  }
+
+  state.editingSubjectTopicFor = null;
   await loadAll();
   render();
 }
