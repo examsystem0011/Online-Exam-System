@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ফাংশন Career Development Center</title>
+<title>পরীক্ষা সিস্টেম</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Baloo+Da+2:wght@500;600;700;800&family=Hind+Siliguri:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700;800&display=swap');
@@ -225,7 +225,7 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>📚 ফাংশন Career Development Center</h1>
+  <h1>📚 পরীক্ষার খাতা</h1>
   <p class="sub" id="subtitle">লোড হচ্ছে...</p>
 
   <div class="tabs">
@@ -1246,8 +1246,10 @@ function downloadQuestionPaper() {
   .opt-line { font-size: 14px; margin-bottom: 4px; }
   .explanation { margin-left: 20px; margin-top: 6px; padding: 10px 14px; background: #FBF9F2; border-left: 3px solid #6C4FF6; font-size: 13.5px; line-height: 1.6; }
 
-  .print-btn-wrap { position: fixed; top: 12px; right: 12px; z-index: 10; }
+  .print-btn-wrap { position: fixed; top: 12px; right: 12px; z-index: 10; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
   .print-btn { padding: 12px 22px; font-size: 15px; cursor: pointer; background:#6C4FF6; color:#fff; border:none; border-radius:10px; box-shadow: 0 3px 10px rgba(0,0,0,0.3); }
+  .print-btn.secondary-btn { background: #fff; color: #6C4FF6; border: 2px solid #6C4FF6; }
+  .status-msg { font-size: 12px; color: #444; background:#fff; padding:6px 10px; border-radius:8px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
 
   @media print {
     body { background: #fff; }
@@ -1256,12 +1258,39 @@ function downloadQuestionPaper() {
     @page { margin: 0; size: A4; }
   }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><\/script>
 </head>
 <body>
   <div class="print-btn-wrap">
-    <button class="print-btn" onclick="window.print()">PDF হিসেবে সেভ করুন (Print)</button>
+    <button class="print-btn" id="downloadPdfBtn">⬇️ PDF ডাউনলোড করুন</button>
+    <button class="print-btn secondary-btn" onclick="window.print()">Print করুন</button>
   </div>
   ${pagesHtml}
+  <script>
+    document.getElementById('downloadPdfBtn').addEventListener('click', async function() {
+      const btn = this;
+      const originalText = btn.textContent;
+      btn.textContent = 'তৈরি হচ্ছে...';
+      btn.disabled = true;
+      try {
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pageEls = document.querySelectorAll('.paper-page');
+        for (let i = 0; i < pageEls.length; i++) {
+          const canvas = await html2canvas(pageEls[i], { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+          const imgData = canvas.toDataURL('image/jpeg', 0.92);
+          if (i > 0) pdf.addPage();
+          pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
+        }
+        pdf.save(${JSON.stringify(ex.title)} + '.pdf');
+      } catch (err) {
+        alert('PDF তৈরি করতে সমস্যা হয়েছে: ' + err.message);
+      }
+      btn.textContent = originalText;
+      btn.disabled = false;
+    });
+  <\/script>
 </body>
 </html>`);
   printWindow.document.close();
