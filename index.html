@@ -1017,11 +1017,11 @@ function downloadQuestionPaper() {
   const r = state.lastResult;
   if (!ex || !r) return;
 
-  let questionsHtml = '';
-  ex.questions.forEach((q, qi) => {
+  const letters = ['ক', 'খ', 'গ', 'ঘ', 'ঙ', 'চ'];
+
+  function buildQuestionHtml(q, qi) {
     const given = r.answers[q.id];
     const isCorrect = given === q.correctIndex;
-
     let optionsHtml = '';
     q.options.forEach((opt, oi) => {
       const isCorrectOpt = oi === q.correctIndex;
@@ -1038,22 +1038,84 @@ function downloadQuestionPaper() {
       } else if (isGivenOpt && isCorrectOpt) {
         marker += ' (আপনার উত্তর)';
       }
-      const letters = ['ক', 'খ', 'গ', 'ঘ', 'ঙ', 'চ'];
       optionsHtml += `<div class="opt-line" style="${style}">(${letters[oi] || (oi+1)}) ${esc(opt)}${marker}</div>`;
     });
-
-    questionsHtml += `<div class="q-block">
+    return `<div class="q-block">
       <div class="q-title"><span class="q-num">${qi+1}.</span> ${esc(q.text)} <span class="q-status ${isCorrect ? 'ok' : 'no'}">${isCorrect ? '[সঠিক]' : '[ভুল]'}</span></div>
       <div class="options">${optionsHtml}</div>
       ${q.explanation ? `<div class="explanation"><b>ব্যাখ্যা:</b> ${escMultiline(q.explanation)}</div>` : ''}
     </div>`;
+  }
+
+  // প্রতিটা প্রশ্নের আনুমানিক "উচ্চতা" (ইউনিটে) হিসাব করে পেজ ভাগ করা হচ্ছে,
+  // যাতে ব্রাউজারের অনির্ভরযোগ্য অটো-pagination-এর উপর নির্ভর করতে না হয়
+  function estimateHeight(q) {
+    let units = 2; // প্রশ্নের শিরোনামের জন্য বেস
+    units += q.options.length * 0.7;
+    if (q.explanation) {
+      const lines = Math.ceil(q.explanation.length / 70) + (q.explanation.split('\n').length - 1);
+      units += 1 + lines * 0.65;
+    }
+    return units;
+  }
+
+  const MAX_UNITS_PER_PAGE = 15.5; // একটা পেজে যতটুকু জায়গা নিরাপদে ধরে (হেডার/ফুটার বাদে)
+  const pages = [];
+  let currentPage = [];
+  let currentUnits = 0;
+
+  ex.questions.forEach((q, qi) => {
+    const h = estimateHeight(q);
+    if (currentUnits + h > MAX_UNITS_PER_PAGE && currentPage.length > 0) {
+      pages.push(currentPage);
+      currentPage = [];
+      currentUnits = 0;
+    }
+    currentPage.push({ q, qi });
+    currentUnits += h;
   });
+  if (currentPage.length > 0) pages.push(currentPage);
+  if (pages.length === 0) pages.push([]);
 
   const pct = Math.round((r.score / r.total) * 100);
   const subjectBits = [];
   if (ex.subject) subjectBits.push(esc(ex.subject));
   if (ex.topic) subjectBits.push(esc(ex.topic));
   const subjectTopicLine = subjectBits.length > 0 ? subjectBits.join(' — ') : '';
+
+  const headerHtml = `<div class="page-header">
+    <div class="brand-row">
+      <img src="${LOGO_BASE64}" alt="Function logo">
+      <span class="brand-text">ফাংশন - Career Development &amp; Skills Center</span>
+    </div>
+    ${subjectTopicLine ? `<div class="subject-topic">${subjectTopicLine}</div>` : ''}
+  </div>`;
+
+  const footerHtml = `<div class="page-footer">
+    <div class="fb-row">
+      <span class="fb-item"><span class="fb-icon">f</span> ফাংশন - Career Development &amp; Skills Center</span>
+      <span class="fb-item"><span class="fb-icon">f</span> Md Ikram Hossain</span>
+    </div>
+    <div class="phone-row">📞 ০১৩১৬৮৮৩৩৭০</div>
+  </div>`;
+
+  let pagesHtml = '';
+  pages.forEach((pageItems, pIdx) => {
+    let bodyHtml = '';
+    if (pIdx === 0) {
+      bodyHtml += `<div class="student-row">
+        <span><b>নাম:</b> ${esc(r.studentName)}</span>
+        <span><b>স্কোর:</b> ${r.score}/${r.total} (${pct}%)</span>
+      </div>`;
+    }
+    pageItems.forEach(({ q, qi }) => { bodyHtml += buildQuestionHtml(q, qi); });
+
+    pagesHtml += `<section class="paper-page">
+      ${headerHtml}
+      <div class="page-body">${bodyHtml}</div>
+      ${footerHtml}
+    </section>`;
+  });
 
   const printWindow = window.open('', '_blank');
   printWindow.document.write(`<!DOCTYPE html>
@@ -1062,34 +1124,44 @@ function downloadQuestionPaper() {
 <meta charset="UTF-8">
 <title>${esc(ex.title)} — প্রশ্নপত্র</title>
 <style>
-  @page { margin: 140px 34px 110px 34px; }
-
   * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
   body {
     font-family: 'Hind Siliguri', 'Noto Sans Bengali', system-ui, sans-serif;
-    color: #222; max-width: 800px; margin: 0 auto; position: relative;
+    color: #222; background: #ccc;
   }
 
-  /* প্রতি প্রিন্ট পেজে পুনরাবৃত্ত হেডার/ফুটার */
+  .paper-page {
+    width: 210mm; min-height: 297mm;
+    margin: 0 auto 16px;
+    background: #fff;
+    display: flex; flex-direction: column;
+    page-break-after: always; break-after: page;
+    overflow: hidden;
+  }
+  .paper-page:last-child { page-break-after: auto; break-after: auto; }
+
   .page-header {
-    position: fixed; top: 0; left: 0; right: 0; height: 90px;
+    flex-shrink: 0;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     background: linear-gradient(135deg, #F3F1FB, #EDE8FF);
     border-bottom: 3px solid #6C4FF6;
-    padding: 8px 20px;
+    padding: 14px 20px;
   }
   .page-header .brand-row { display: flex; align-items: center; gap: 10px; margin-bottom: 3px; }
   .page-header .brand-row img { height: 38px; width: auto; }
   .page-header .brand-row .brand-text { font-size: 17px; font-weight: 800; color: #1B2A4A; }
   .page-header .subject-topic {
-    font-size: 12px; color: #6C4FF6; font-weight: 700; margin-top: 1px;
+    font-size: 12px; color: #6C4FF6; font-weight: 700; margin-top: 4px;
     background: #fff; padding: 2px 12px; border-radius: 20px; border: 1px solid #D9D1FA;
   }
 
+  .page-body { flex: 1 1 auto; padding: 22px 34px; }
+
   .page-footer {
-    position: fixed; bottom: 0; left: 0; right: 0; height: 68px;
+    flex-shrink: 0;
     background: linear-gradient(135deg, #1B2A4A, #2B3E66);
-    padding: 8px 20px;
+    padding: 10px 20px;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
     font-size: 11.5px; color: #E3E7F5;
   }
@@ -1102,57 +1174,33 @@ function downloadQuestionPaper() {
   }
   .page-footer .phone-row { font-weight: 700; color: #FFB800; }
 
-  .content-wrap { padding-top: 0; }
-
   .student-row { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 12px; }
-  .q-block {
-    margin-bottom: 24px;
-    page-break-inside: avoid; break-inside: avoid;
-    orphans: 4; widows: 4;
-  }
-  .q-title { font-weight: 700; font-size: 15px; margin-bottom: 8px; page-break-after: avoid; break-after: avoid; }
-  .explanation { page-break-inside: avoid; break-inside: avoid; }
+  .q-block { margin-bottom: 20px; }
+  .q-title { font-weight: 700; font-size: 15px; margin-bottom: 8px; }
   .q-num { color: #6C4FF6; }
   .q-status { font-size: 12px; font-weight: 700; margin-left: 6px; }
   .q-status.ok { color: #2D6A4F; }
   .q-status.no { color: #B8471F; }
-  .options { margin-left: 20px; margin-bottom: 8px; page-break-before: avoid; break-before: avoid; }
+  .options { margin-left: 20px; margin-bottom: 8px; }
   .opt-line { font-size: 14px; margin-bottom: 4px; }
   .explanation { margin-left: 20px; margin-top: 6px; padding: 10px 14px; background: #FBF9F2; border-left: 3px solid #6C4FF6; font-size: 13.5px; line-height: 1.6; }
 
-  .print-btn-wrap { position: fixed; top: 8px; right: 8px; z-index: 10; }
-  .print-btn { padding: 12px 22px; font-size: 15px; cursor: pointer; background:#6C4FF6; color:#fff; border:none; border-radius:10px; box-shadow: 0 3px 10px rgba(0,0,0,0.2); }
-  @media print { .print-btn-wrap { display: none; } }
+  .print-btn-wrap { position: fixed; top: 12px; right: 12px; z-index: 10; }
+  .print-btn { padding: 12px 22px; font-size: 15px; cursor: pointer; background:#6C4FF6; color:#fff; border:none; border-radius:10px; box-shadow: 0 3px 10px rgba(0,0,0,0.3); }
+
+  @media print {
+    body { background: #fff; }
+    .print-btn-wrap { display: none; }
+    .paper-page { width: auto; min-height: 100vh; margin: 0; box-shadow: none; }
+    @page { margin: 0; size: A4; }
+  }
 </style>
 </head>
 <body>
-  <div class="page-header">
-    <div class="brand-row">
-      <img src="${LOGO_BASE64}" alt="Function logo">
-      <span class="brand-text">ফাংশন - Career Development &amp; Skills Center</span>
-    </div>
-    ${subjectTopicLine ? `<div class="subject-topic">${subjectTopicLine}</div>` : ''}
-  </div>
-
-  <div class="page-footer">
-    <div class="fb-row">
-      <span class="fb-item"><span class="fb-icon">f</span> ফাংশন - Career Development &amp; Skills Center</span>
-      <span class="fb-item"><span class="fb-icon">f</span> Md Ikram Hossain</span>
-    </div>
-    <div class="phone-row">📞 ০১৩১৬৮৮৩৩৭০</div>
-  </div>
-
   <div class="print-btn-wrap">
     <button class="print-btn" onclick="window.print()">PDF হিসেবে সেভ করুন (Print)</button>
   </div>
-
-  <div class="content-wrap">
-    <div class="student-row">
-      <span><b>নাম:</b> ${esc(r.studentName)}</span>
-      <span><b>স্কোর:</b> ${r.score}/${r.total} (${pct}%)</span>
-    </div>
-    ${questionsHtml}
-  </div>
+  ${pagesHtml}
 </body>
 </html>`);
   printWindow.document.close();
