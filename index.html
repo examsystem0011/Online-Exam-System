@@ -1477,9 +1477,23 @@ function renderStudentResult() {
   if (!ex || !r) return '<div class="card"><div class="empty">ফলাফল পাওয়া যায়নি।</div></div>';
 
   const pct = Math.round((r.score / r.total) * 100);
+
+  let correctCount = 0, wrongCount = 0, unansweredCount = 0;
+  ex.questions.forEach(q => {
+    const given = r.answers[q.id];
+    if (given === undefined) unansweredCount++;
+    else if (given === q.correctIndex) correctCount++;
+    else wrongCount++;
+  });
+
   let html = `<div class="score-box">
     <div class="num">${r.score} / ${r.total}</div>
     <div class="lbl">${esc(r.studentName)} — ${esc(ex.title)} — ${pct}% সঠিক</div>
+    <div class="lbl" style="margin-top:10px; display:flex; gap:16px; justify-content:center; flex-wrap:wrap;">
+      <span>✅ সঠিক: ${toBnNumeral(correctCount)}টি</span>
+      <span>❌ ভুল: ${toBnNumeral(wrongCount)}টি</span>
+      ${unansweredCount > 0 ? `<span>⬜ উত্তর দেননি: ${toBnNumeral(unansweredCount)}টি</span>` : ''}
+    </div>
   </div>`;
 
   html += `<button class="secondary" data-action="download-question-paper" style="width:100%; margin-bottom:16px;">📄 প্রশ্নপত্র ডাউনলোড করুন (ব্যাখ্যাসহ)</button>`;
