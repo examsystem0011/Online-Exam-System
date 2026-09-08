@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ফাংশন</title>
+<title>পরীক্ষা সিস্টেম</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Baloo+Da+2:wght@500;600;700;800&family=Hind+Siliguri:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700;800&display=swap');
@@ -225,7 +225,7 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>📚 ফাংশন-Career Development & Skills Center</h1>
+  <h1>📚 পরীক্ষার খাতা</h1>
   <p class="sub" id="subtitle">লোড হচ্ছে...</p>
 
   <div class="tabs">
@@ -271,6 +271,7 @@ let state = {
   editingWindowFor: null,
   editingSubjectTopicFor: null,
   editingQuestionId: null,
+  resultsFilterExamId: null,
   editingOptions: [{text:'', correct:true}, {text:'', correct:false}]
 };
 
@@ -615,13 +616,31 @@ function renderTeacherResults() {
   if (state.results.length === 0) {
     return '<div class="card"><div class="empty">এখনো কেউ পরীক্ষা দেয়নি।</div></div>';
   }
-  let html = `<div class="toolbar">
-    <h2>মোট ${state.results.length}টি জমা</h2>
+
+  const selectedExamId = state.resultsFilterExamId || 'all';
+  const filteredResults = selectedExamId === 'all'
+    ? state.results
+    : state.results.filter(r => r.examId === selectedExamId);
+
+  let optionsHtml = `<option value="all" ${selectedExamId === 'all' ? 'selected' : ''}>সব পরীক্ষা (${toBnNumeral(state.results.length)}টি জমা)</option>`;
+  state.exams.forEach(ex => {
+    const count = state.results.filter(r => r.examId === ex.id).length;
+    if (count === 0) return;
+    optionsHtml += `<option value="${ex.id}" ${selectedExamId === ex.id ? 'selected' : ''}>${esc(ex.title)} (${toBnNumeral(count)}টি জমা)</option>`;
+  });
+
+  let html = `<div class="card" style="margin-bottom:16px;">
+    <label>পরীক্ষা বেছে নিন</label>
+    <select id="resultsExamFilter">${optionsHtml}</select>
+  </div>`;
+
+  html += `<div class="toolbar">
+    <h2>${toBnNumeral(filteredResults.length)}টি জমা</h2>
     <button class="secondary" data-action="export-pdf">PDF ডাউনলোড করুন</button>
   </div>`;
 
   let rows = '';
-  state.results.forEach(r => {
+  filteredResults.forEach(r => {
     const ex = getExam(r.examId);
     const pct = r.total > 0 ? Math.round((r.score / r.total) * 100) : 0;
     const date = new Date(r.submittedAt);
@@ -633,11 +652,12 @@ function renderTeacherResults() {
       <td>${r.score} / ${r.total}</td>
       <td>${pct}%</td>
       <td>${dateStr}</td>
+      <td><button class="danger" data-action="delete-result" data-id="${r.id}" style="padding:5px 10px; font-size:12px;">মুছুন</button></td>
     </tr>`;
   });
   html += `<div class="card">
     <table>
-      <tr><th>নাম</th><th>মোবাইল</th><th>পরীক্ষা</th><th>স্কোর</th><th>শতাংশ</th><th>সময়</th></tr>
+      <tr><th>নাম</th><th>মোবাইল</th><th>পরীক্ষা</th><th>স্কোর</th><th>শতাংশ</th><th>সময়</th><th></th></tr>
       ${rows}
     </table>
   </div>`;
@@ -786,6 +806,16 @@ function bindTeacherEvents() {
 
   const exportBtn = container.querySelector('[data-action="export-pdf"]');
   if (exportBtn) exportBtn.addEventListener('click', exportResultsPdf);
+
+  const resultsFilter = container.querySelector('#resultsExamFilter');
+  if (resultsFilter) resultsFilter.addEventListener('change', () => {
+    state.resultsFilterExamId = resultsFilter.value === 'all' ? null : resultsFilter.value;
+    render();
+  });
+
+  container.querySelectorAll('[data-action="delete-result"]').forEach(btn => {
+    btn.addEventListener('click', () => deleteResult(btn.dataset.id));
+  });
 }
 
 function doTeacherLogin() {
@@ -1074,6 +1104,14 @@ async function deleteQuestion(id) {
   render();
 }
 
+async function deleteResult(id) {
+  if (!confirm('এই রেজাল্টটি স্থায়ীভাবে মুছে ফেলা হবে। নিশ্চিত?')) return;
+  const { error } = await sb.from('results').delete().eq('id', id);
+  if (error) { alert('মুছতে সমস্যা হয়েছে: ' + error.message); return; }
+  await loadAll();
+  render();
+}
+
 function downloadQuestionPaper() {
   const ex = getExam(state.activeExamId);
   const r = state.lastResult;
@@ -1315,27 +1353,36 @@ function downloadQuestionPaper() {
 }
 
 function exportResultsPdf() {
+  const selectedExamId = state.resultsFilterExamId;
+  const filteredResults = selectedExamId
+    ? state.results.filter(r => r.examId === selectedExamId)
+    : state.results;
+  const selectedExam = selectedExamId ? getExam(selectedExamId) : null;
+  const titleText = selectedExam ? `${selectedExam.title} — রেজাল্ট শিট` : 'সব পরীক্ষার রেজাল্ট';
+
   let rows = '';
-  state.results.forEach(r => {
+  filteredResults.forEach(r => {
     const ex = getExam(r.examId);
     const pct = r.total > 0 ? Math.round((r.score / r.total) * 100) : 0;
     const dateStr = formatBnDateTime(new Date(r.submittedAt));
     rows += `<tr>
       <td>${esc(r.studentName)}</td>
       <td>${esc(r.studentPhone || '—')}</td>
-      <td>${esc(ex ? ex.title : 'মুছে ফেলা পরীক্ষা')}</td>
+      ${selectedExam ? '' : `<td>${esc(ex ? ex.title : 'মুছে ফেলা পরীক্ষা')}</td>`}
       <td>${r.score} / ${r.total}</td>
       <td>${pct}%</td>
       <td>${dateStr}</td>
     </tr>`;
   });
 
+  const examColumnHeader = selectedExam ? '' : '<th>পরীক্ষা</th>';
+
   const printWindow = window.open('', '_blank');
   printWindow.document.write(`<!DOCTYPE html>
 <html lang="bn">
 <head>
 <meta charset="UTF-8">
-<title>পরীক্ষার রেজাল্ট</title>
+<title>${esc(titleText)}</title>
 <style>
   body { font-family: 'Noto Sans Bengali', 'Hind Siliguri', system-ui, sans-serif; padding: 30px; color: #2C2C2A; }
   h1 { font-size: 20px; margin-bottom: 4px; }
@@ -1349,10 +1396,10 @@ function exportResultsPdf() {
 </style>
 </head>
 <body>
-  <h1>পরীক্ষার রেজাল্ট</h1>
-  <div class="meta">মোট ${state.results.length}টি জমা — তৈরি হয়েছে ${new Date().toLocaleString('bn-BD', {day:'numeric', month:'long', year:'numeric'})}</div>
+  <h1>${esc(titleText)}</h1>
+  <div class="meta">মোট ${filteredResults.length}টি জমা — তৈরি হয়েছে ${new Date().toLocaleString('bn-BD', {day:'numeric', month:'long', year:'numeric'})}</div>
   <table>
-    <tr><th>নাম</th><th>মোবাইল</th><th>পরীক্ষা</th><th>স্কোর</th><th>শতাংশ</th><th>সময়</th></tr>
+    <tr><th>নাম</th><th>মোবাইল</th>${examColumnHeader}<th>স্কোর</th><th>শতাংশ</th><th>সময়</th></tr>
     ${rows}
   </table>
   <br>
