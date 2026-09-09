@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ফাংশন</title>
+<title>পরীক্ষা সিস্টেম</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Baloo+Da+2:wght@500;600;700;800&family=Hind+Siliguri:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700;800&display=swap');
@@ -225,7 +225,7 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>📚 ফাংশন-Career Development & Skills Center</h1>
+  <h1>📚 পরীক্ষার খাতা</h1>
   <p class="sub" id="subtitle">লোড হচ্ছে...</p>
 
   <div class="tabs">
@@ -1388,7 +1388,6 @@ function exportResultsPdf() {
     rows += `<tr>
       ${selectedExam ? `<td><b>${toBnOrdinal(i + 1)}</b></td>` : ''}
       <td>${esc(r.studentName)}</td>
-      <td>${esc(r.studentPhone || '—')}</td>
       ${selectedExam ? '' : `<td>${esc(ex ? ex.title : 'মুছে ফেলা পরীক্ষা')}</td>`}
       <td>${r.score} / ${r.total}</td>
       <td>${pct}%</td>
@@ -1421,7 +1420,7 @@ function exportResultsPdf() {
   <h1>${esc(titleText)}</h1>
   <div class="meta">মোট ${filteredResults.length}টি জমা — তৈরি হয়েছে ${new Date().toLocaleString('bn-BD', {day:'numeric', month:'long', year:'numeric'})}</div>
   <table>
-    <tr>${rankColumnHeader}<th>নাম</th><th>মোবাইল</th>${examColumnHeader}<th>স্কোর</th><th>শতাংশ</th><th>সময়</th></tr>
+    <tr>${rankColumnHeader}<th>নাম</th>${examColumnHeader}<th>স্কোর</th><th>শতাংশ</th><th>সময়</th></tr>
     ${rows}
   </table>
   <br>
