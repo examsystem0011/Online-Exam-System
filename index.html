@@ -1864,11 +1864,9 @@ async function submitExam(autoSubmitted) {
 
   if (!autoSubmitted) {
     const unanswered = ex.questions.filter(q => state.answers[q.id] === undefined);
-    const errEl = document.getElementById('examErr');
     if (unanswered.length > 0) {
-      errEl.textContent = `${unanswered.length}টি প্রশ্নের উত্তর দেওয়া বাকি আছে।`;
-      errEl.style.display = 'block';
-      return;
+      const confirmed = confirm(`${unanswered.length}টি প্রশ্নের উত্তর দেওয়া হয়নি। আপনি কি এখনই জমা দিতে চান?`);
+      if (!confirmed) return;
     }
   }
 
