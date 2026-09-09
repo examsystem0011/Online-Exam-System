@@ -618,9 +618,17 @@ function renderTeacherResults() {
   }
 
   const selectedExamId = state.resultsFilterExamId || 'all';
-  const filteredResults = selectedExamId === 'all'
-    ? state.results
-    : state.results.filter(r => r.examId === selectedExamId);
+  const isSingleExam = selectedExamId !== 'all';
+  let filteredResults = isSingleExam
+    ? state.results.filter(r => r.examId === selectedExamId)
+    : state.results;
+
+  if (isSingleExam) {
+    filteredResults = filteredResults.slice().sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return new Date(a.submittedAt) - new Date(b.submittedAt);
+    });
+  }
 
   let optionsHtml = `<option value="all" ${selectedExamId === 'all' ? 'selected' : ''}>সব পরীক্ষা (${toBnNumeral(state.results.length)}টি জমা)</option>`;
   state.exams.forEach(ex => {
@@ -640,24 +648,29 @@ function renderTeacherResults() {
   </div>`;
 
   let rows = '';
-  filteredResults.forEach(r => {
+  filteredResults.forEach((r, i) => {
     const ex = getExam(r.examId);
     const pct = r.total > 0 ? Math.round((r.score / r.total) * 100) : 0;
     const date = new Date(r.submittedAt);
     const dateStr = formatBnDateTime(date);
     rows += `<tr>
+      ${isSingleExam ? `<td><b>${toBnOrdinal(i + 1)}</b></td>` : ''}
       <td>${esc(r.studentName)}</td>
       <td>${esc(r.studentPhone || '—')}</td>
-      <td>${esc(ex ? ex.title : 'মুছে ফেলা পরীক্ষা')}</td>
+      ${isSingleExam ? '' : `<td>${esc(ex ? ex.title : 'মুছে ফেলা পরীক্ষা')}</td>`}
       <td>${r.score} / ${r.total}</td>
       <td>${pct}%</td>
       <td>${dateStr}</td>
       <td><button class="danger" data-action="delete-result" data-id="${r.id}" style="padding:5px 10px; font-size:12px;">মুছুন</button></td>
     </tr>`;
   });
+
+  const rankHeader = isSingleExam ? '<th>ক্রম</th>' : '';
+  const examHeader = isSingleExam ? '' : '<th>পরীক্ষা</th>';
+
   html += `<div class="card">
     <table>
-      <tr><th>নাম</th><th>মোবাইল</th><th>পরীক্ষা</th><th>স্কোর</th><th>শতাংশ</th><th>সময়</th><th></th></tr>
+      <tr>${rankHeader}<th>নাম</th><th>মোবাইল</th>${examHeader}<th>স্কোর</th><th>শতাংশ</th><th>সময়</th><th></th></tr>
       ${rows}
     </table>
   </div>`;
@@ -1354,18 +1367,26 @@ function downloadQuestionPaper() {
 
 function exportResultsPdf() {
   const selectedExamId = state.resultsFilterExamId;
-  const filteredResults = selectedExamId
+  let filteredResults = selectedExamId
     ? state.results.filter(r => r.examId === selectedExamId)
     : state.results;
   const selectedExam = selectedExamId ? getExam(selectedExamId) : null;
   const titleText = selectedExam ? `${selectedExam.title} — রেজাল্ট শিট` : 'সব পরীক্ষার রেজাল্ট';
 
+  if (selectedExam) {
+    filteredResults = filteredResults.slice().sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return new Date(a.submittedAt) - new Date(b.submittedAt);
+    });
+  }
+
   let rows = '';
-  filteredResults.forEach(r => {
+  filteredResults.forEach((r, i) => {
     const ex = getExam(r.examId);
     const pct = r.total > 0 ? Math.round((r.score / r.total) * 100) : 0;
     const dateStr = formatBnDateTime(new Date(r.submittedAt));
     rows += `<tr>
+      ${selectedExam ? `<td><b>${toBnOrdinal(i + 1)}</b></td>` : ''}
       <td>${esc(r.studentName)}</td>
       <td>${esc(r.studentPhone || '—')}</td>
       ${selectedExam ? '' : `<td>${esc(ex ? ex.title : 'মুছে ফেলা পরীক্ষা')}</td>`}
@@ -1375,6 +1396,7 @@ function exportResultsPdf() {
     </tr>`;
   });
 
+  const rankColumnHeader = selectedExam ? '<th>ক্রম</th>' : '';
   const examColumnHeader = selectedExam ? '' : '<th>পরীক্ষা</th>';
 
   const printWindow = window.open('', '_blank');
@@ -1399,7 +1421,7 @@ function exportResultsPdf() {
   <h1>${esc(titleText)}</h1>
   <div class="meta">মোট ${filteredResults.length}টি জমা — তৈরি হয়েছে ${new Date().toLocaleString('bn-BD', {day:'numeric', month:'long', year:'numeric'})}</div>
   <table>
-    <tr><th>নাম</th><th>মোবাইল</th>${examColumnHeader}<th>স্কোর</th><th>শতাংশ</th><th>সময়</th></tr>
+    <tr>${rankColumnHeader}<th>নাম</th><th>মোবাইল</th>${examColumnHeader}<th>স্কোর</th><th>শতাংশ</th><th>সময়</th></tr>
     ${rows}
   </table>
   <br>
