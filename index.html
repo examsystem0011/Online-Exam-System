@@ -350,41 +350,46 @@ function getExam(id) {
 
 // ============ ডেটা লোড করা (Supabase থেকে) ============
 
+// Supabase একবারে সর্বোচ্চ ১০০০টি সারি দেয়। তাই পেজ ধরে ধরে সব ডেটা আনা হচ্ছে,
+// নইলে অপশন/প্রশ্ন বেশি হয়ে গেলে শেষের দিকের অপশনগুলো হারিয়ে যায়।
+async function fetchAll(table, orderCols) {
+  const PAGE = 1000;
+  let all = [];
+  let from = 0;
+  while (true) {
+    let q = sb.from(table).select('*');
+    orderCols.forEach(c => { q = q.order(c.col, { ascending: c.asc }); });
+    q = q.order('id', { ascending: true }); // একই মানের সারির ক্রম স্থির রাখার জন্য
+    const { data, error } = await q.range(from, from + PAGE - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    all = all.concat(data);
+    from += data.length;
+  }
+  return all;
+}
+
 async function loadAll() {
   state.loading = true;
   render();
   try {
-    const { data: exams, error: examErr } = await sb
-      .from('exams')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (examErr) throw examErr;
+    const exams = await fetchAll('exams', [{col:'created_at', asc:false}]);
+    const questions = await fetchAll('questions', [{col:'created_at', asc:true}]);
+    const options = await fetchAll('options', [{col:'question_id', asc:true}, {col:'option_order', asc:true}]);
+    const results = await fetchAll('results', [{col:'submitted_at', asc:false}]);
 
-    const { data: questions, error: qErr } = await sb
-      .from('questions')
-      .select('*')
-      .order('created_at', { ascending: true });
-    if (qErr) throw qErr;
+    // অপশনগুলো প্রশ্ন অনুযায়ী গুছিয়ে নেওয়া (option_order অনুযায়ী সাজানো)
+    const optionsByQ = {};
+    options.forEach(o => { (optionsByQ[o.question_id] = optionsByQ[o.question_id] || []).push(o); });
+    Object.values(optionsByQ).forEach(arr => arr.sort((a, b) => a.option_order - b.option_order));
 
-    const { data: options, error: oErr } = await sb
-      .from('options')
-      .select('*')
-      .order('option_order', { ascending: true });
-    if (oErr) throw oErr;
-
-    const { data: results, error: rErr } = await sb
-      .from('results')
-      .select('*')
-      .order('submitted_at', { ascending: false });
-    if (rErr) throw rErr;
-
-    // প্রশ্নের সাথে অপশন জোড়া লাগানো
     const questionsWithOptions = questions.map(q => ({
       id: q.id,
+      examId: q.exam_id,
       text: q.text,
       explanation: q.explanation,
       correctIndex: q.correct_index,
-      options: options.filter(o => o.question_id === q.id).map(o => o.option_text)
+      options: (optionsByQ[q.id] || []).map(o => o.option_text)
     }));
 
     // পরীক্ষার সাথে প্রশ্ন জোড়া লাগানো
@@ -396,10 +401,7 @@ async function loadAll() {
       durationMin: ex.duration_min,
       startsAt: ex.starts_at,
       endsAt: ex.ends_at,
-      questions: questionsWithOptions.filter(q => {
-        const orig = questions.find(qq => qq.id === q.id);
-        return orig.exam_id === ex.id;
-      })
+      questions: questionsWithOptions.filter(q => q.examId === ex.id)
     }));
 
     state.results = results.map(r => ({
@@ -605,9 +607,14 @@ function renderExamDetail() {
     ex.questions.forEach((q, i) => {
       html += `<div class="q-item">
         <div class="q-text">${i+1}. ${esc(q.text)}</div>`;
-      q.options.forEach((o, oi) => {
-        html += `<div class="opt ${oi === q.correctIndex ? 'correct' : ''}">${oi === q.correctIndex ? '✓ ' : '&nbsp;&nbsp;'}${esc(o)}</div>`;
-      });
+      
+    (q.options || []).forEach((o, oi) => {
+      const op = (o === null || o === undefined) ? '' : String(o);
+      html += '<div class="opt ' + (oi === q.correctIndex ? 'correct' : '') + '">' + (oi === q.correctIndex ? '✓ ' : '&nbsp;&nbsp;') + esc(op) + '</div>';
+    });
+
+
+
       if (q.explanation) {
         html += `<div class="hint" style="margin-top:8px">ব্যাখ্যা: ${escMultiline(q.explanation)}</div>`;
       }
@@ -1140,9 +1147,14 @@ async function submitQuestion() {
     option_text: text,
     option_order: i
   }));
-  const { error: oError } = await sb.from('options').insert(optionRows);
+  const { data: savedOpts, error: oError } = await sb.from('options').insert(optionRows).select();
   if (oError) {
     errEl.textContent = 'অপশন সেভ করতে সমস্যা হয়েছে: ' + oError.message;
+    errEl.style.display = 'block';
+    return;
+  }
+  if (!savedOpts || savedOpts.length !== optionRows.length) {
+    errEl.textContent = 'সতর্কতা: ' + optionRows.length + 'টি অপশনের মধ্যে ' + (savedOpts ? savedOpts.length : 0) + 'টি সেভ হয়েছে। আবার চেষ্টা করুন।';
     errEl.style.display = 'block';
     return;
   }
